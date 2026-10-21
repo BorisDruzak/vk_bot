@@ -1,0 +1,486 @@
+{
+  "_comment": "Числа ниже — настройки владельца, а не опубликованные безопасные лимиты VK. Действия выполняются только с --execute.",
+  "lookback_days": 7,
+  "recent_only": true,
+  "scan_scrolls_per_group": 5,
+  "stale_scrolls": 3,
+  "scan_pause_seconds": 3.0,
+  "action_pause_seconds": 4.0,
+  "actions": {
+    "like": true,
+    "repost": true
+  },
+  "limits": {
+    "posts_per_run": 8,
+    "actions_per_run": 10,
+    "actions_per_24h": 25,
+    "likes_per_run": 8,
+    "likes_per_24h": 20,
+    "reposts_per_run": 2,
+    "reposts_per_24h": 5
+  },
+  "groups": [
+    {
+      "id": 198577444,
+      "name": "ТЕРРИТОРИАЛЬНОЕ УПРАВЛЕНИЕ № 1 СОСНОВСКОГО МУНИЦИПАЛЬНОГО ОКРУГА",
+      "url": "https://vk.com/club198577444",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 235964887,
+      "name": "ТЕРРИТОРИАЛЬНОЕ УПРАВЛЕНИЕ № 2 СОСНОВСКОГО МУНИЦИПАЛЬНОГО ОКРУГА",
+      "url": "https://vk.com/club235964887",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 239477616,
+      "name": "ТЕРРИТОРИАЛЬНОЕ УПРАВЛЕНИЕ № 3 СОСНОВСКОГО МУНИЦИПАЛЬНОГО ОКРУГА",
+      "url": "https://vk.com/club239477616",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 217513915,
+      "name": "ТЕРРИТОРИАЛЬНОЕ УПРАВЛЕНИЕ № 4 СОСНОВСКОГО МУНИЦИПАЛЬНОГО ОКРУГА",
+      "url": "https://vk.com/club217513915",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 188206921,
+      "name": "АДМИНИСТРАЦИЯ СОСНОВСКОГО МУНИЦИПАЛЬНОГО ОКРУГА",
+      "url": "https://vk.com/club188206921",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 81371041,
+      "name": "МУНИЦИПАЛЬНОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ ДОПОЛНИТЕЛЬНОГО ОБРАЗОВАНИЯ \"ДЕТСКАЯ ШКОЛА ИСКУССТВ П. РОЩИНО\"",
+      "url": "https://vk.com/club81371041",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 195689670,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"МИРНЕНСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club195689670",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 204981838,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД КОМБИНИРОВАННОГО ВИДА № 118 П. ПОЛЕВОЙ\"",
+      "url": "https://vk.com/club204981838",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 195072791,
+      "name": "МУНИЦИПАЛЬНОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ ДОПОЛНИТЕЛЬНОГО ОБРАЗОВАНИЯ \"ДЕТСКАЯ ШКОЛА ИСКУССТВ С. ДОЛГОДЕРЕВЕНСКОЕ\"",
+      "url": "https://vk.com/club195072791",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 210773348,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"КАСАРГИНСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club210773348",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 217247367,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ПОЛЕТАЕВСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club217247367",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 194666765,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД №14 П. СОЛНЕЧНОГО\"",
+      "url": "https://vk.com/club194666765",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 214241968,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД КОМБИНИРОВАННОГО ВИДА № 1 С. ДОЛГОДЕРЕВЕНСКОГО\"",
+      "url": "https://vk.com/club214241968",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 214253875,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД №17 П. ТРУБНОГО\"",
+      "url": "https://vk.com/club214253875",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 198916476,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"СИРЮСИНСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club198916476",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 216229467,
+      "name": "УПРАВЛЕНИЕ ОБРАЗОВАНИЯ АДМИНИСТРАЦИИ СОСНОВСКОГО МУНИЦИПАЛЬНОГО ОКРУГА",
+      "url": "https://vk.com/club216229467",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 61594586,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"КРАСНОПОЛЬСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club61594586",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 219685434,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ АРХАНГЕЛЬСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА",
+      "url": "https://vk.com/club219685434",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 154642685,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ТЕЧЕНСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club154642685",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 186180047,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"САККУЛОВСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club186180047",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 193586621,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ЕСАУЛЬСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club193586621",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 222439043,
+      "name": "КОМИТЕТ ПО УПРАВЛЕНИЮ ИМУЩЕСТВОМ И ЗЕМЕЛЬНЫМ ОТНОШЕНИЯМ СОСНОВСКОГО МУНИЦИПАЛЬНОГО ОКРУГА",
+      "url": "https://vk.com/club222439043",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 210098201,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"СОЛНЕЧНАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club210098201",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 195911397,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ТРУБНЕНСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club195911397",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 214260549,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД № 35 С. ТУКТУБАЕВО\"",
+      "url": "https://vk.com/club214260549",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 217441088,
+      "name": "ОТДЕЛ КУЛЬТУРЫ АДМИНИСТРАЦИИ СОСНОВСКОГО МУНИЦИПАЛЬНОГО ОКРУГА",
+      "url": "https://vk.com/club217441088",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 203298456,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ТОМИНСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club203298456",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 205050103,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД КОМБИНИРОВАННОГО ВИДА №19 П. РОЩИНО\"",
+      "url": "https://vk.com/club205050103",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 217484075,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"РОЩИНСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club217484075",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 200697871,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД КОМБИНИРОВАННОГО ВИДА №3 С. ДОЛГОДЕРЕВЕНСКОГО\"",
+      "url": "https://vk.com/club200697871",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 217724847,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"САРГАЗИНСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club217724847",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 204983592,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД № 7 П. САРГАЗЫ\"",
+      "url": "https://vk.com/club204983592",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 214474263,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД КОМБИНИРОВАННОГО ВИДА № 13 С. КРЕМЕНКУЛЬ\"",
+      "url": "https://vk.com/club214474263",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 69126405,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ВОЗНЕСЕНСКАЯ ОСНОВНАЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club69126405",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 219875672,
+      "name": "МУНИЦИПАЛЬНОЕ БЮДЖЕТНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ЕСАУЛЬСКАЯ СПЕЦИАЛЬНАЯ (КОРРЕКЦИОННАЯ) ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА-ИНТЕРНАТ ДЛЯ ДЕТЕЙ-СИРОТ И ДЕТЕЙ, ОСТАВШИХСЯ БЕЗ ПОПЕЧЕНИЯ РОДИТЕЛЕЙ, С ОГРАНИЧЕННЫМИ ВОЗМОЖНОСТЯМИ ЗДОРОВЬЯ (НАРУШЕНИЕ ИНТЕЛЛЕКТА)\"",
+      "url": "https://vk.com/club219875672",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 238757362,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"МАЛИНОВСКАЯ ОСНОВНАЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club238757362",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 200449044,
+      "name": "МУНИЦИПАЛЬНОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ ДОПОЛНИТЕЛЬНОГО ОБРАЗОВАНИЯ \"ДЕТСКАЯ ШКОЛА ИСКУССТВ П. ПОЛЕТАЕВО\"",
+      "url": "https://vk.com/club200449044",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 193361883,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"СМОЛЬНИНСКАЯ ОСНОВНАЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club193361883",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 162826626,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"Б-БАЛАНДИНСКАЯ ОСНОВНАЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club162826626",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 151609066,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ КРЕМЕНКУЛЬСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА",
+      "url": "https://vk.com/club151609066",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 195117661,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ЦЕНТР РАЗВИТИЯ РЕБЕНКА - ДЕТСКИЙ САД № 20 П.РОЩИНО\"",
+      "url": "https://vk.com/club195117661",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 205016577,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА П.ПОЛЕВОЙ\"",
+      "url": "https://vk.com/club205016577",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 216003128,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД №40 П. ЕСАУЛЬСКИЙ\"",
+      "url": "https://vk.com/club216003128",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 204982652,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД КОМБИНИРОВАННОГО ВИДА\" №2 С. ДОЛГОДЕРЕВЕНСКОГО",
+      "url": "https://vk.com/club204982652",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 208950322,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД № 6 П. ТОМИНСКИЙ\"",
+      "url": "https://vk.com/club208950322",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 222432952,
+      "name": "ФИНАНСОВОЕ УПРАВЛЕНИЕ АДМИНИСТРАЦИИ СОСНОВСКОГО МУНИЦИПАЛЬНОГО ОКРУГА",
+      "url": "https://vk.com/club222432952",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 217665485,
+      "name": "МУНИЦИПАЛЬНОЕ УЧРЕЖДЕНИЕ ДОПОЛНИТЕЛЬНОГО ОБРАЗОВАНИЯ \"ДЕТСКО - ЮНОШЕСКАЯ СПОРТИВНАЯ ШКОЛА С. КРЕМЕНКУЛЬ\"",
+      "url": "https://vk.com/club217665485",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 217362247,
+      "name": "УПРАВЛЕНИЕ СОЦИАЛЬНОЙ ЗАЩИТЫ НАСЕЛЕНИЯ АДМИНИСТРАЦИИ СОСНОВСКОГО МУНИЦИПАЛЬНОГО ОКРУГА",
+      "url": "https://vk.com/club217362247",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 71066220,
+      "name": "МУНИЦИПАЛЬНОЕ УЧРЕЖДЕНИЕ ДОПОЛНИТЕЛЬНОГО ОБРАЗОВАНИЯ \"ДЕТСКО - ЮНОШЕСКАЯ СПОРТИВНАЯ ШКОЛА\" СОСНОВСКОГО МУНИЦИПАЛЬНОГО ОКРУГА",
+      "url": "https://vk.com/club71066220",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 200065135,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД №15 П. САККУЛОВО\"",
+      "url": "https://vk.com/club200065135",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 214244327,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДОЛГОДЕРЕВЕНСКАЯ СРЕДНЯЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club214244327",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 204983793,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД №48 Д. БУТАКИ\"",
+      "url": "https://vk.com/club204983793",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 217536460,
+      "name": "МУНИЦИПАЛЬНОЕ УЧРЕЖДЕНИЕ \"КОМПЛЕКСНЫЙ ЦЕНТР СОЦИАЛЬНОГО ОБСЛУЖИВАНИЯ НАСЕЛЕНИЯ\" СОСНОВСКОГО МУНИЦИПАЛЬНОГО ОКРУГА ЧЕЛЯБИНСКОЙ ОБЛАСТИ",
+      "url": "https://vk.com/club217536460",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 204986361,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД №12 П. МИРНЫЙ\"",
+      "url": "https://vk.com/club204986361",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 186177369,
+      "name": "МУНИЦИПАЛЬНОЕ КАЗЕННОЕ УЧРЕЖДЕНИЕ \"СОСНОВСКИЙ РАЙОННЫЙ ИСТОРИКО-КРАЕВЕДЧЕСКИЙ МУЗЕЙ\"",
+      "url": "https://vk.com/club186177369",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 104486183,
+      "name": "МУНИЦИПАЛЬНОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ КУЛЬТУРЫ \"МЕЖПОСЕЛЕНЧЕСКОЕ СОЦИАЛЬНО-КУЛЬТУРНОЕ ОБЪЕДИНЕНИЕ\"",
+      "url": "https://vk.com/club104486183",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 96262301,
+      "name": "МУНИЦИПАЛЬНОЕ КАЗЕННОЕ УЧРЕЖДЕНИЕ КУЛЬТУРЫ \"МЕЖПОСЕЛЕНЧЕСКАЯ ЦЕНТРАЛИЗОВАННАЯ БИБЛИОТЕЧНАЯ СИСТЕМА\"",
+      "url": "https://vk.com/club96262301",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    }
+  ],
+  "scan_groups_per_run": 3,
+  "scan_groups_cap": 1,
+  "scan_scroll_cap": 2,
+  "read_pause_seconds": 15.0,
+  "audit_posts_per_run": 3,
+  "scan_min_interval_hours": 12.0
+}

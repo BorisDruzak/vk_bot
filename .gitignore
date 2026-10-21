@@ -1,0 +1,54 @@
+# Browser sessions / account binding
+.vk-local-profile/
+.vk-local-profile-*/
+.vk-local-profile*/
+vk_account_bindings.json
+*cookie*
+*Cookie*
+*session*.json
+*storage_state*.json
+
+# Secrets / OAuth
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets*.json
+
+# Runtime state and databases
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-wal
+*.db-shm
+.vk-*.lock
+*state*.json
+
+# Runtime reports, authorized diagnostic captures
+vk_actions_results.csv
+vk_pairs_results.csv
+vk_review_*.csv
+vk_approve_*.csv
+vk_actions_results*.csv
+vk_*_results.json
+screenshots/
+authenticated_html/
+*.har
+
+# Python / IDE / cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+.idea/
+.vscode/
+*.log
+.DS_Store
+Thumbs.db
