@@ -4,18 +4,33 @@ on:
   pull_request:
 jobs:
   fast:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: '3.12'
+          - os: windows-latest
+            python: '3.14'
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 8
+    env:
+      PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python }}
       - name: Install Python requirements
         run: python -m pip install -r requirements.txt
-      - name: Compile all source files
-        run: python -m compileall -q vk_unified.py vk_accounts.py vk_account_smoke.py vk_api_read.py vk_batch.py vk_groups.py vk_test.py
+      - name: Compile source and tests
+        run: python -m compileall -q vk_unified.py vk_accounts.py vk_account_smoke.py vk_account_batch.py vk_api_read.py vk_batch.py vk_groups.py vk_test.py tests
       - name: Account/profile unit tests (no VK login)
         run: python -m unittest discover -s tests -p 'test_accounts_v624.py' -q
-      - name: Second account smoke unit tests (no VK login)
+
+      - name: Account 2 single-post smoke tests (offline)
         run: python -m unittest discover -s tests -p 'test_account2_smoke_v625.py' -q
+      - name: Account 2 catalog isolation and batch tests (offline)
+        run: python -m unittest discover -s tests -p 'test_account2_batch_v626.py' -q
+      - name: Command action budgets and recovery tests (offline)
+        run: python -m unittest discover -s tests -p 'test_command_actions_v623.py' -q

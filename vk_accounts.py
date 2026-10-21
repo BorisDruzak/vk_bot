@@ -232,8 +232,8 @@ def accounts_report(binding_path: Path = BINDINGS_PATH) -> int:
         else:
             state = 'личность не привязана'
         print(f'   №{account}: {path.name}; каталог={"есть" if path.is_dir() else "нет"}; {state}')
-    print('[ACCOUNTS] Аккаунт №2: вход, проверка сессии и разовый тест одного API-поста. '
-          'Массовые команды недоступны; отдельная SQLite для истории действий.')
+    print('[ACCOUNTS] Аккаунт №2: отдельная SQLite и ручные --test-post/--run-actions; '
+          'синхронные задания двух аккаунтов не поддерживаются.')
     return 0
 
 

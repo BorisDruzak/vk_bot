@@ -214,10 +214,9 @@ class SecondAccountSmokeTests(unittest.TestCase):
             self.assertEqual(unified.main(argv),0)
             self.assertEqual(target.call_args.kwargs['which'],'like')
             self.assertEqual(target.call_args.kwargs['confirm'],True)
-        with redirect_stdout(io.StringIO()),patch('sys.stderr',new=io.StringIO()):
-            with self.assertRaises(SystemExit) as err:
-                unified.main(['--account','2','--run-actions','--likes','30','--confirm'])
-            self.assertEqual(err.exception.code,2)
+        with patch.object(unified,'run_account2_mode',return_value=0) as handler:
+            self.assertEqual(unified.main(['--account','2','--run-actions','--likes','30','--confirm']),0)
+            self.assertEqual(handler.call_args.args[0].account,2)
 
     def test_account2_only_status_is_local(self):
         with patch.object(smoke,'print_test_status',return_value=0) as status:

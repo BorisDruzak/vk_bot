@@ -28,7 +28,7 @@ import vk_api_read as api
 import vk_batch as engine
 import vk_groups as multi
 
-VERSION = '6.25'
+VERSION = '6.26'
 LOCKFILE = Path(__file__).resolve().parent / '.vk-unified-running.lock'
 DEFAULT_CAMPAIGN = 'test_60_likes'
 DEFAULT_PAIR_CAMPAIGN = 'auto_30_pairs'
@@ -847,12 +847,15 @@ class CommandActionBudget:
         self.requested = {'like': likes, 'repost': reposts}
         self.used = Counter()
         self.current_group_id = None
+        self.identity_guard = None  # optional verified account binding, before every click
 
     def available_actions(self, actions: set[str]) -> set[str]:
         engine.require_platform_unlocked(self.db)
         return {a for a in actions if a in self.requested and self.used[a] < self.requested[a]}
 
     def reserve(self, post_id: int, action: str) -> None:
+        if self.identity_guard is not None:
+            self.identity_guard()
         if action not in self.available_actions({action}):
             raise engine.SafetyLimitReached(f'Командное число действий {action} уже достигнуто')
         if self.current_group_id is None:
@@ -938,7 +941,8 @@ def command_action_candidates(db, groups: list[dict], days: int,
 
 def run_command_actions(db, cfg: dict, groups: list[dict], *,
                         likes: int, reposts: int, max_posts: int,
-                        pause: float) -> int:
+                        pause: float, profile: Path | None = None,
+                        identity_guard=None) -> int:
     """One bounded manual invocation; no automatic repeat/scheduling.
 
     The requested numbers are MAXIMUM ATTEMPTS in THIS invocation, not a
@@ -958,15 +962,18 @@ def run_command_actions(db, cfg: dict, groups: list[dict], *,
           f'до {reposts} попыток репоста, не более {max_posts} публикаций.')
     print('[COMMAND] Исторические ограничения JSON не применяются к этому режиму. '
           'Остановка при ограничении VK, CAPTCHA и неизвестном результате сохранена.')
-    engine.PROFILE.mkdir(parents=True, exist_ok=True)
+    active_profile = engine.PROFILE if profile is None else Path(profile)
+    active_profile.mkdir(parents=True, exist_ok=True)
     try:
         with sync_playwright() as pw:
             context = pw.chromium.launch_persistent_context(
-                user_data_dir=str(engine.PROFILE), headless=False, locale='ru-RU',
+                user_data_dir=str(active_profile), headless=False, locale='ru-RU',
                 viewport={'width': 1320, 'height': 900})
             try:
                 page = context.pages[0] if context.pages else context.new_page()
                 engine.watch_rate_limit_responses(page)
+                if identity_guard is not None:
+                    budget.identity_guard = lambda: identity_guard(context)
                 engine.configure_navigation_pacing(page, pause, db=db)
                 for row in candidates:
                     if inspected >= max_posts:
@@ -989,6 +996,8 @@ def run_command_actions(db, cfg: dict, groups: list[dict], *,
                     try:
                         engine.require_platform_unlocked(db)
                         engine.go_to_post(page, gid, pid)
+                        if identity_guard is not None:
+                            identity_guard(context)
                         current_date = multi.exact_post_date_info(page,gid,pid).get('publishedAt')
                         if (current_date is None
                             or not multi.date_allowed(current_date,cfg['lookback_days'],True)
@@ -1103,6 +1112,81 @@ def export_command_action_results(db, groups: list[dict], dest: Path = ACTION_RE
     print(f'[CSV REPORT] {len(rows)} записей: {dest}')
     return len(rows)
 
+
+def run_account2_mode(args, parser) -> int:
+    """Account #2: independent action ledger, shared public API metadata only.
+
+    Profile #1 and its SQLite are never written. The shared catalog is read-only;
+    there is no auto-discovery, scheduling or coordinated multi-account batch.
+    """
+    import vk_accounts as accounts
+    import vk_account_smoke as smoke
+    import vk_account_batch as account_catalog
+
+    mode = 'run' if args.run_actions else 'status' if args.action_status else 'preview'
+    if args.test_actions is not None or args.run_pairs or args.run or args.discover:
+        parser.error('Для №2 доступны только --preview, --action-status, --run-actions и разовый --test-post')
+    if mode != 'run' and (args.confirm or args.likes is not None or args.reposts is not None):
+        parser.error('--likes/--reposts/--confirm допускаются только с --run-actions')
+    likes, reposts = (args.likes or 0), (args.reposts or 0)
+    if mode == 'run' and (likes < 0 or reposts < 0 or likes + reposts == 0 or not args.confirm):
+        parser.error('Для действий №2 необходимы --likes N / --reposts M и --confirm')
+    if args.read_pause is not None and not 5 <= args.read_pause <= 300:
+        parser.error('--read-pause должен быть 5..300 секунд')
+    if args.max_posts is None:
+        args.max_posts = max(likes, reposts)*2 if mode == 'run' else 12
+    if args.max_posts < 1:
+        parser.error('--max-posts должен быть >=1')
+    cfg = multi.load_config(args.config)
+    selected = multi.selected_groups(cfg,args.only,0)
+    if not selected:
+        parser.error('Нет активных групп для второго аккаунта')
+    if args.read_pause is not None:
+        cfg['read_pause_seconds'] = max(cfg['read_pause_seconds'], args.read_pause)
+    cfg['read_pause_seconds'] = max(cfg['read_pause_seconds'], 20.)
+    if likes and not cfg['actions']['like'] or reposts and not cfg['actions']['repost']:
+        parser.error('Запрошенное действие глобально выключено в vk_groups.json')
+    vk_id = smoke.pinned_user_id(2)
+    if not accounts.profile_for_account(2).is_dir():
+        raise smoke.SmokeError('Профиль Chromium №2 отсутствует; сначала --account 2 --check-account')
+    report = args.report_file or (Path(__file__).resolve().parent / 'vk_actions_results_account_2.csv')
+    print(f'VK UNIFIED v{VERSION} | аккаунт=2, VK ID {vk_id}; источник: общий VK API (только чтение)')
+    # Serialize both accounts' action runs to prevent overlapping VK sessions.
+    with exclusive_run(), accounts.exclusive_profile(2), closing(engine.db_open(smoke.ACCOUNT2_DB)) as db:
+        smoke.init_account2(db, vk_id)
+        if mode == 'run':
+            engine.require_platform_unlocked(db)
+        if mode != 'status':
+            total = account_catalog.refresh_public_catalog(db, source_db=engine.DB_PATH,
+                                     target_db=smoke.ACCOUNT2_DB, days=cfg['lookback_days'])
+            print(f'[API CATALOG] {total} публичных ID с точными датами. История №1 не переносилась.')
+        if mode == 'preview':
+            found = command_action_candidates(db,selected,cfg['lookback_days'],1,1)
+            print(f'[ACCOUNT 2 PREVIEW] До {args.max_posts} постов из {len(found)} кандидатов; без действий')
+            for row in found[:args.max_posts]:
+                print(f'   https://vk.com/wall-{row["group_id"]}_{row["post_id"]} | '
+                      f'like={row["like_status"]} repost={row["repost_status"]}')
+            return 0
+        if mode == 'status':
+            print_command_action_status(db)
+            engine.safety_report(db,0)
+            try:
+                export_command_action_results(db,selected,report)
+            except OSError as exc:
+                print('[CSV WARNING] Не удалось обновить CSV, закрой Excel:',type(exc).__name__)
+            return 0
+        try:
+            run_command_actions(db,cfg,selected,likes=likes,reposts=reposts,
+                        max_posts=args.max_posts,pause=cfg['read_pause_seconds'],
+                        profile=accounts.profile_for_account(2),
+                        identity_guard=lambda context: smoke._live_identity(context,vk_id))
+        finally:
+            try:
+                export_command_action_results(db,selected,report)
+            except OSError as exc:
+                print('[CSV WARNING] Не удалось обновить CSV, закрой Excel:',type(exc).__name__)
+    return 0
+
 def main(argv: list[str] | None = None) -> int:
     parser=argparse.ArgumentParser(
         description='VK Unified: VK API (поиск), SQLite (очередь), Playwright (лайки/репосты), CSV (отчёт)')
@@ -1135,7 +1219,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--confirm',action='store_true',help='Явное разрешение на действия этого запуска')
     parser.add_argument('--config',type=Path,default=multi.CONFIG_PATH)
     parser.add_argument('--account',type=int,choices=(1,2),default=1,
-                        help='Локальный номер Chromium-профиля (№2: вход и разовый тест одного поста)')
+                        help='Локальный номер Chromium-профиля (№2: отдельные статусы и ручной запуск)')
     parser.add_argument('--test-actions',choices=('like','repost','both'),default=None,
                         help='Для --test-post: только лайк, только репост или оба действия')
     args=parser.parse_args(argv)
@@ -1165,9 +1249,40 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     if args.test_actions is not None:
         parser.error('--test-actions допускается только с --test-post')
+    if args.account == 2 and (args.preview or args.run_actions or args.action_status):
+        try:
+            return run_account2_mode(args, parser)
+        except (ValueError, RunAlreadyActive, OSError, json.JSONDecodeError) as exc:
+            print('[ACCOUNT 2 STOP]',exc)
+            return 2
+        except engine.PlatformRateLimited as exc:
+            import vk_account_smoke as smoke
+            with closing(engine.db_open(smoke.ACCOUNT2_DB)) as db:
+                engine.lock_on_platform_warning(db,0,str(exc))
+            print('[RATE LIMIT] VK ограничил запросы; дальнейшие действия второго аккаунта запрещены.')
+            return 2
+        except engine.StopRun as exc:
+            import vk_account_smoke as smoke
+            message=str(exc)
+            if any(word in message.lower() for word in ('captcha','капча','ограничени','подозрительная активность','робот')):
+                with closing(engine.db_open(smoke.ACCOUNT2_DB)) as db:
+                    engine.lock_on_platform_warning(db,0,message)
+            print('[ACCOUNT 2 STOP]',exc)
+            return 2
+        except (PWTimeout, PlaywrightError) as exc:
+            print('[ACCOUNT 2 STOP] Chromium:',type(exc).__name__)
+            return 2
+        except RuntimeError as exc:
+            # Covers missing/mismatched account binding, invalid shared catalog
+            # and preserved locks without exposing credentials or DOM.
+            print('[ACCOUNT 2 STOP]',exc)
+            return 2
+        except KeyboardInterrupt:
+            print('[ACCOUNT 2 STOP] Прервано; история сохранена в SQLite №2')
+            return 130
     if args.account != 1:
-        parser.error('Аккаунт №2: доступен --test-post для одного выбранного поста. '
-                     'Массовые команды второго аккаунта заблокированы.')
+        parser.error('Для аккаунта №2 доступны --test-post, --preview, --run-actions и --action-status; '
+                     'остальные команды запускай с --account 1')
     command_mode = args.run_actions or (args.run_pairs and
                         (args.likes is not None or args.reposts is not None))
     command_likes = 0 if args.likes is None else args.likes

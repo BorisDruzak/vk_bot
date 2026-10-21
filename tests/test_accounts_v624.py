@@ -122,11 +122,11 @@ class AccountProfilesTests(unittest.TestCase):
             self.assertEqual(unified.main(['--account','2','--check-account']),0)
         route.assert_called_once_with(2,'check-account')
 
-    def test_unified_rejects_actions_for_second_account(self):
-        with redirect_stdout(io.StringIO()), patch('sys.stderr',new=io.StringIO()):
-            with self.assertRaises(SystemExit) as raised:
-                unified.main(['--account','2','--run-actions','--likes','1','--confirm'])
-        self.assertEqual(raised.exception.code,2)
+    def test_unified_routes_account2_batch_through_isolated_handler(self):
+        with patch.object(unified,'run_account2_mode',return_value=0) as handler:
+            self.assertEqual(unified.main(['--account','2','--run-actions','--likes','1','--confirm']),0)
+            handler.assert_called_once()
+            self.assertEqual(handler.call_args.args[0].account,2)
 
     def test_empty_header_never_binds_identity(self):
         context=MagicMock()
