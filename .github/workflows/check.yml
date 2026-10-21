@@ -17,5 +17,5 @@ jobs:
         run: python -m compileall -q vk_unified.py vk_accounts.py vk_account_smoke.py vk_api_read.py vk_batch.py vk_groups.py vk_test.py
       - name: Account/profile unit tests (no VK login)
         run: python -m unittest discover -s tests -p 'test_accounts_v624.py' -q
-      - name: Account #2 smoke tests (offline)
+      - name: Second account smoke unit tests (no VK login)
         run: python -m unittest discover -s tests -p 'test_account2_smoke_v625.py' -q
