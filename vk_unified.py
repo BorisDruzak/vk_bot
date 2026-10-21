@@ -28,7 +28,7 @@ import vk_api_read as api
 import vk_batch as engine
 import vk_groups as multi
 
-VERSION = '6.24'
+VERSION = '6.25'
 LOCKFILE = Path(__file__).resolve().parent / '.vk-unified-running.lock'
 DEFAULT_CAMPAIGN = 'test_60_likes'
 DEFAULT_PAIR_CAMPAIGN = 'auto_30_pairs'
@@ -1110,6 +1110,8 @@ def main(argv: list[str] | None = None) -> int:
     modes.add_argument('--login-only',action='store_true',help='Ручной первый вход без действий, отдельный Chromium-профиль')
     modes.add_argument('--check-account',action='store_true',help='Проверить VK ID и сохранённую сессию, без действий')
     modes.add_argument('--accounts-report',action='store_true',help='Локальный список привязок аккаунтов, без сети')
+    modes.add_argument('--test-post',type=str,metavar='GROUP_POST',help='Разовая проверка или тест действия аккаунта №2 на одном API-посте')
+    modes.add_argument('--test-status',action='store_true',help='Локальные статусы разового теста аккаунта №2')
     modes.add_argument('--status',action='store_true',help='Только локальный отчёт')
     modes.add_argument('--preview',action='store_true',help='Только локальная очередь')
     modes.add_argument('--discover',action='store_true',help='Пакетное чтение публичных стен VK API с пагинацией')
@@ -1133,7 +1135,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--confirm',action='store_true',help='Явное разрешение на действия этого запуска')
     parser.add_argument('--config',type=Path,default=multi.CONFIG_PATH)
     parser.add_argument('--account',type=int,choices=(1,2),default=1,
-                        help='Локальный номер Chromium-профиля (№2 пока только вход/проверка)')
+                        help='Локальный номер Chromium-профиля (№2: вход и разовый тест одного поста)')
+    parser.add_argument('--test-actions',choices=('like','repost','both'),default=None,
+                        help='Для --test-post: только лайк, только репост или оба действия')
     args=parser.parse_args(argv)
     if args.login_only or args.check_account or args.accounts_report:
         if args.confirm or args.likes is not None or args.reposts is not None or args.only:
@@ -1142,9 +1146,28 @@ def main(argv: list[str] | None = None) -> int:
         return vk_accounts.run_account_mode(args.account,
                         'login-only' if args.login_only else
                         'check-account' if args.check_account else 'accounts-report')
+    if args.test_post is not None or args.test_status:
+        if args.account != 2:
+            parser.error('Для теста второго профиля укажи --account 2')
+        if args.likes is not None or args.reposts is not None or args.only or args.report_file or args.max_posts is not None:
+            parser.error('Тест аккаунта №2 не принимает параметры массовой очереди')
+        import vk_account_smoke as smoke
+        try:
+            if args.test_status:
+                if args.confirm or args.test_actions is not None:
+                    parser.error('--test-status только читает локальное состояние')
+                return smoke.print_test_status(2)
+            return smoke.test_post(2,args.test_post,which=args.test_actions or 'both',
+                                   confirm=args.confirm,config_path=args.config,
+                                   wait_seconds=args.read_pause or 20.0)
+        except (smoke.SmokeError, ValueError, OSError, json.JSONDecodeError) as exc:
+            print('[SMOKE STOP]',exc)
+            return 2
+    if args.test_actions is not None:
+        parser.error('--test-actions допускается только с --test-post')
     if args.account != 1:
-        parser.error('Аккаунт №2 пока поддерживает только --login-only, --check-account, --accounts-report. '
-                     'Автоматические лайки/репосты для нескольких профилей не включены.')
+        parser.error('Аккаунт №2: доступен --test-post для одного выбранного поста. '
+                     'Массовые команды второго аккаунта заблокированы.')
     command_mode = args.run_actions or (args.run_pairs and
                         (args.likes is not None or args.reposts is not None))
     command_likes = 0 if args.likes is None else args.likes
