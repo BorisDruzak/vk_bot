@@ -171,5 +171,6 @@
   См.SCHEDULER_TIMING_DIAGNOSTICS_2026_10_29.md.
 - [x]29октября14:59:30: установка issue#4,985VM/OK/20skip,10DBbackup,
   savedplan/history/прежняяпауза сохранены; читающийrecorder наVM проверен.
-- [ ] Live приёмка всехaction-stage spans новой версии после отдельного
-  разрешения снять текущую source-date паузу. См.DEPLOY_TIMING_DIAGNOSTICS_2026_10_29.md.
+- [x]29октября: по прямому разрешению снята только source-date пауза после
+  свежего proof; естественный slot43 дал4/4verified и54spans всех7типов,
+  история/80slots/no-catchup сохранены. См.DEPLOY_TIMING_DIAGNOSTICS_2026_10_29.md.

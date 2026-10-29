@@ -117,3 +117,46 @@ reservation→result. Вложенные source_guard/confirmation spans нел�
 
 Локальные доказательства: outputs/issue4-vm-deploy-2026-10-29/;
 конфиги, профили, реальные базы и приватные сведения в Git не публикуются.
+
+## Явное возобновление и первая естественная пачка
+
+После прямого разрешения пользователя29октября повторён свежий read-only
+proof15:52:10–15:52:19: exactactor6/source-date matched, без действий и unpause.
+В15:54:23 под exclusive activity lease и BEGIN IMMEDIATE снята только
+`action_stopped_source_date_unavailable`, gate перенесён на уже сохранённый
+будущий slot43 —15:57:59. Перед commit проверены текущий worker5340,
+свежий heartbeat, точные paused/diagnostic/job1152, pass1intent0/interrupted,
+отсутствие in-flight/pending/running/unfinished/active uncertain/platform locks,
+хеши установленного артефакта. Есть отдельный backup scheduler и durable audit.
+В транзакции менялись только paused и resume_not_before. Защищённые записи,
+last_action_batch, квоты и планы не изменились. Job1152failed/attemptNULL сохранён.
+
+**Штатный slot43:15:58:02.155–16:04:35.698YEKT, batch_complete.**
+Четыре новые попытки и четыре verified: jobs1153–1156, триcommunity и одинlike,
+actor6 — дваcommunity, actor5 — community иlike. Actor-local attempt IDs,
+точные source/destination ledgers и verified статусы сверены read-only.
+Нового uncertain, паузы, повторной отправки или catch-up нет.
+
+Данные окна: refresh завершён16:00:05.843, готовность интервала16:00:05.844,
+первый durable intent16:00:54.590, Dread16:06:16, Dintent16:07:16,
+clickdeadline16:07:56, следующий S16:08:16. Окно после готовности430.156с.
+От предыдущего первого intent9313.668с, все cooldown spans20001мс.
+После конца пачки и обязательных20с остаётся200.302с до следующего слота:
+эта пачка не вынуждает задерживать следующий claim.
+
+В scheduler появились54полных stage spans всех7типов: browser4,
+navigation7, guard28, community_prepare3, click4, confirmation4, cooldown4.
+Failed samples0; batch_timing attempts4/verified4 совпадает с четырьмя
+distinct(job,attempt_id). Нет усечения отчёта. Это функциональная приёмка
+измерений, не устойчивый прогноз p95 по одной пачке.
+Небольшая разница refresh→spacing_ready0.000636с включает служебную проверку;
+метка spacing_wait при таком значении не доказывает фактический sleep540с.
+В этой пачке ждать минимального интервала не потребовалось.
+
+После завершения дополнительно сверены все сохранённые дни, старые jobs/passes
+до1152включительно, изоляции и все прежние action_attempts в6actor-ledgers:
+прежние строки неизменны. Слоты28–42не были claimed. Worker5340продолжил
+штатное расписание, pausedNULL/stopFalse/active_uncertain0.
+Private evidence: resume-result.json, live-acceptance.json и транзакционный
+resume-audit внутри VM-local backup каталога. Новых разрешений на автоматическое
+снятие последующих пауз это возобновление не даёт.

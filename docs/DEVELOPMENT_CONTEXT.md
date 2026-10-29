@@ -1,5 +1,15 @@
 # ПОЛНЫЙ КОНТЕКСТ РАЗРАБОТКИ — VK Unified / VK Bot
 
+29октября15:54:23YEKT: после прямого разрешения и свежего15:52exactactor6/date
+proof снята только source_date_unavailable; сохранённый futuregate15:57:59,
+job1152failed/attemptNULL/pass1intent0interrupted неизменён. Worker5340не
+перезапускался. Первая естественная пачкаslot43:15:58:02–16:04:35,4попытки/
+4verified (3community+1like, jobs1153–1156),54spans/все7типов, cooldown20001мс,
+24freshAPIreads,unknown0,pausedNULL/stopFalse/active_uncertain0. Read-onlyproof:
+старыеjobs/passes≤1152,80slots,изоляции ипрежниеattempts6actorDB сохранены,
+catchup28–42нет. См.DEPLOY_TIMING_DIAGNOSTICS_2026_10_29.md;локальноеevidence
+outputs/issue4-vm-deploy-2026-10-29/live-acceptance.json.
+
 29октября14:59:30YEKT: issue#4 установлен из bf37c10 после зелёногоCI и
 985VM/OK/20Node-skip/442.353с в source-only копии.43файла, existingVM
 vk_web.py POS-overlay сохранён. Backup10DB/integrityok+25JSON;144table/schema
