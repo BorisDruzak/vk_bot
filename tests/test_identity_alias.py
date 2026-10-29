@@ -56,7 +56,7 @@ class IdentityAliasTests(unittest.TestCase):
 
     def transport(self,params,**kwargs):
         self.calls.append((params.copy(),kwargs))
-        return 200,{'response':{'type':'user','object_id':202}}
+        return 200,{'response':[{'id':202,'screen_name':params['user_ids']}]}
 
     def count(self):
         with closing(sqlite3.connect(self.db_path)) as db:
@@ -85,7 +85,9 @@ class IdentityAliasTests(unittest.TestCase):
             self.assertEqual(self.prepare(context),202)
             self.assertEqual(self.prepare(context),202)
         self.assertEqual(lock_seen,[True]);self.assertEqual(self.count(),1)
-        self.assertEqual(self.calls[0][0]['screen_name'],'a')
+        self.assertEqual(self.calls[0][0]['user_ids'],'a')
+        self.assertEqual(self.calls[0][0]['fields'],'screen_name')
+        self.assertEqual(self.calls[0][0]['_read_method'],'users.get')
         self.assertEqual(self.calls[0][1]['timeout'],20)
         self.assertEqual(accounts.inspect_context(context,attempts=1),202)
         self.assertFalse((self.root/'vk_public_data.sqlite3').exists())
@@ -196,7 +198,9 @@ class IdentityAliasTests(unittest.TestCase):
 
     def test_nonuser_or_malformed_public_response_cannot_become_cached_identity(self):
         for response in ({'type':'group','object_id':202},{'type':'application','object_id':202},
-                {'type':'user','object_id':True},{'type':'user','object_id':0},[],None):
+                [{'id':True,'screen_name':'private_alias'}],[{'id':0,'screen_name':'private_alias'}],
+                [{'id':202,'screen_name':'other_alias'}],[{'id':202}],
+                [{'id':202,'screen_name':'private_alias'},{'id':203,'screen_name':'private_alias'}],[],None):
             context=Context('/private_alias')
             with self.subTest(response=response),patch.object(self.identity.time,'sleep'),\
                  patch.object(api,'bounded_transport',return_value=(200,{'response':response})):

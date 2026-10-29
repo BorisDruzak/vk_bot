@@ -29,7 +29,7 @@ import vk_read_trace as read_trace
 API_VERSION = '5.199'
 API_URL = 'https://api.vk.com/method/wall.get'
 _READ_METHOD_URLS = {'wall.get':API_URL,
-                    'utils.resolveScreenName':'https://api.vk.com/method/utils.resolveScreenName'}
+                    'users.get':'https://api.vk.com/method/users.get'}
 RATE_CODES = {6, 9, 29}
 API_SOURCE = 'vk-api-wall.get'
 PAGE_SIZE = 100
@@ -496,8 +496,8 @@ class VKReadClient:
         self._reserve(0)
         read_result=None
         try:
-            read_result=self.transport({'_read_method':'utils.resolveScreenName',
-                'screen_name':alias,'access_token':self.token,'v':API_VERSION})
+            read_result=self.transport({'_read_method':'users.get',
+                'user_ids':alias,'fields':'screen_name','access_token':self.token,'v':API_VERSION})
             status,payload=read_result
             if status==429:raise VkApiLimited('VK API: HTTP 429')
             if status!=200:raise VkApiFailure(f'VK API: HTTP {status}')
@@ -508,13 +508,18 @@ class VKReadClient:
                 if type(code) is not int:raise VkApiFailure('VK API: invalid identity error code')
                 if code in RATE_CODES:raise VkApiLimited('VK API: read rate limit',code=code)
                 if code in (14,17):raise VkApiProtection('VK API: read protection required',code=code)
-                if code in (5,7,28):raise VkApiAuthFailure('VK API: identity read authorization failed',code=code)
+                if code in (5,7,28,1051):raise VkApiAuthFailure('VK API: identity read authorization failed',code=code)
                 raise VkApiFailure('VK API: identity method failed',code=code)
             result=payload.get('response')
-            if (not isinstance(result,dict) or result.get('type')!='user' or
-                    type(result.get('object_id')) is not int or not 0<result['object_id']<=2**53-1):
+            if not isinstance(result,list) or len(result)!=1 or not isinstance(result[0],dict):
                 raise VkApiFailure('VK API: exact user identity unavailable')
-            return result['object_id']
+            user=result[0];screen_name=user.get('screen_name')
+            if (type(user.get('id')) is not int or not 0<user['id']<=2**53-1 or
+                    user.get('type','user')!='user' or 'deactivated' in user or
+                    type(screen_name) is not str or not screen_name.isascii() or
+                    screen_name.casefold()!=alias.casefold()):
+                raise VkApiFailure('VK API: exact user identity unavailable')
+            return user['id']
         except VkApiFailure as exc:
             if not getattr(exc,'read_diagnostics',None):
                 detail=read_trace.sanitize_summary(getattr(read_result,'read_diagnostics',None))

@@ -1,5 +1,12 @@
 # ПОЛНЫЙ КОНТЕКСТ РАЗРАБОТКИ — VK Unified / VK Bot
 
+29октября: auth227f3da(1086tests/greenCI) НЕустановлен — живойstagedread
+utils.resolveScreenName вернул1051, bindings/history/runtimeсохранены.
+Выбран publicusers.get(alias,screen_name), exactsingleactiveuser+matchingalias;
+производственногоfallbackнет.107APIрегрессий/21aliasPASS,VM39targetPASS;
+полныепроверки/новыйCI/живаяпроверкадоступности/enableожидаются.
+Сама futurepolicy67/390 иfifth50/0/20ужеустановленыизf32c868.
+
 29октября17:55:44YEKT: f32c868installed после exactgreenLinux/Windows+OMSUCI,
 VM1048/OK/24Node-skip/601.487с.11DB/integrityok+27JSONbackup,9files/POSoverlay
 untouched,151swapchecks/139postrestarttables+schemas. Today4/80/quota320,

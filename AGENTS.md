@@ -3,7 +3,7 @@
 ## Буквенная ссылка собственного профиля —29октября
 
 - Numericown-headerfastpath остаётся. Alias разрешается только явнойподготовкой
-  доintent через officialutils.resolveScreenName(type=user), с повторомточной
+  доintent через officialusers.get(exact1user,matchingASCII screen_name), с повторомточной
   шапки/всехвкладок до/послеHTTP, общимledger/pacing5/5000 и20секtimeout.
 - Proof только втомжеBrowserContext ≤300с; смена/конфликт/небезопаснаяVKвкладка
   отзываетего. Инспекторы/проверкипередкликом не выполняютHTTP. Не братьIDиз
