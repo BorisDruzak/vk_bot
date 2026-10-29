@@ -297,11 +297,13 @@ def execute_job(worker,job,row,slot,capacity):
         j=book.job(job);r=book.row(job)
         context={'job':job,'account':j['account'],'kind':j['kind'],'community':j['community_id'],'source_group':j['group_id'],'source_post':j['post_id'],'slot':slot}
         def log(event,**data):
+            worker.observe_timing_event(event,job,**data)
             worker.pulse_action(event,job=job,stage=data.get('stage'))
             state.log_event(event,worker.clock(),**context,**data)
         def record(aid):
             nonlocal attempted
             book.record_attempt(job,aid);attempted+=1
+            worker.observe_timing_event('attempt_reserved',job,attempt_id=aid)
         try:
             log('action_started')
             options={}

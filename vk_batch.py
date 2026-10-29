@@ -21,6 +21,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from weakref import WeakKeyDictionary
 import vk_diagnostics as diagnostics
+import vk_action_timing as action_timing
 
 from playwright.sync_api import Error as PlaywrightError, TimeoutError as PWTimeout, sync_playwright
 
@@ -1157,12 +1158,13 @@ def _final_click_timeout(before_click, *, default_ms=12000):
     return timeout
 
 
-def click_like(page, group_id: int, post_id: int, *, prepared_button=None, before_click=None):
+def click_like(page, group_id: int, post_id: int, *, prepared_button=None, before_click=None, timings=None):
     # Re-resolve immediately before clicking: a SPA update could have replaced
     # the previously selected node or toggled its state.
     locator = post_footer_button(page, group_id, post_id, 'like')
     timeout=_final_click_timeout(before_click)
-    locator.click(timeout=timeout)
+    with action_timing.measure(timings,'click'):
+        locator.click(timeout=timeout)
     page.wait_for_timeout(500)
     ensure_ok(page)
 
@@ -1254,7 +1256,7 @@ def inspect_share_only(page, group_id: int, post_id: int) -> None:
         pass
 
 
-def click_share_then_publish(page, group_id: int, post_id: int, *, before_publish=None, before_click=None):
+def click_share_then_publish(page, group_id: int, post_id: int, *, before_publish=None, before_click=None, timings=None):
     # Share must come from the SAME main-post toolbar as the verified like.
     # A generic 'Поделиться' somewhere in comments or recommended posts is not valid.
     post_footer_button(page, group_id, post_id, 'share').click(timeout=12000)
@@ -1297,7 +1299,8 @@ def click_share_then_publish(page, group_id: int, post_id: int, *, before_publis
             raise StopRun('Назначение изменилось после сохранения попытки')
     final=page.locator('[data-vk-poc-publish="0"]')
     timeout=_final_click_timeout(before_click)
-    final.click(timeout=timeout)
+    with action_timing.measure(timings,'click'):
+        final.click(timeout=timeout)
     page.wait_for_timeout(700)
     ensure_ok(page)
 
@@ -1387,6 +1390,8 @@ def process_one(page, db, group_id: int, row: sqlite3.Row, pause: float, safety:
             # must not manufacture a new execution hook.
             final_guard=vars(safety).get('final_click_timeout') if safety is not None else None
             click_options={'before_click':final_guard} if callable(final_guard) else {}
+            timings=vars(safety).get('stage_timings') if safety is not None else None
+            if isinstance(timings,action_timing.StageTimings):click_options['timings']=timings
             if action == 'like':
                 if safety is not None:
                     safety.reserve(pid, 'like')
@@ -1399,8 +1404,9 @@ def process_one(page, db, group_id: int, row: sqlite3.Row, pause: float, safety:
             status_write(db, group_id, pid, action, "uncertain", "Клик выполнен, подтверждение VK ещё не получено")
             time.sleep(pause)  # stable UI/pacing, not a way to evade anti-spam
             confirmation_guard=vars(safety).get('confirmation_guard') if safety is not None else None
-            data = after_action_state(page,group_id,pid,action=action,
-                guard=confirmation_guard if callable(confirmation_guard) else None)
+            with action_timing.measure(timings,'confirmation'):
+                data = after_action_state(page,group_id,pid,action=action,
+                    guard=confirmation_guard if callable(confirmation_guard) else None)
             if data[desired_flag] is True and (action != 'like' or data.get('main_post_liked') is True):
                 status_write(db, group_id, pid, action, "verified", "VK подтвердил состояние основного поста после загрузки")
                 print(f"   [{action.upper()}] подтверждено VK")

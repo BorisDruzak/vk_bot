@@ -250,6 +250,38 @@ function renderTimeline(){
     group.append(marks);timeline.append(group);
   }
 }
+// BEGIN timing helpers
+function timingSeconds(n){return typeof n==='number'&&Number.isFinite(n)?`${Number(n.toFixed(1))} с`:'—';}
+function timingReason(row){
+  const names={late_claim:'поздний захват слота',spacing_wait:'ожидание интервала 540 с',
+    counter_refresh_deadline:'истёк срок чтения счётчиков',action_deadline:'истёк срок нового intent',
+    no_candidate:'нет подходящего кандидата',platform_block:'защита VK',guard_block:'защитная остановка',
+    quota:'дневная квота',stop_requested:'запрошена остановка',day_changed:'сменился день YEKT'};
+  const reasons=(row.causes||[]).map(c=>names[c]).filter(Boolean);
+  if(row.fourth_not_started_before_intent)reasons.push('четвёртая операция не запускалась, без intent и попытки');
+  if(row.unclaimed_after_grace)reasons.push('слот не захвачен до S + 120 с; пропуск без догоняющего запуска');
+  if(!row.telemetry_available)reasons.push('этапы этой пачки не измерялись');
+  return reasons.join('; ')||'—';
+}
+// END timing helpers
+function renderTiming(){
+  const report=snapshot?.scheduler?.timing,summary=report?.summary||{};
+  if(!$('timing-summary'))return;
+  $('timing-summary').textContent=report?.slots?.length?
+    `Теоретическая вместимость: ${value(summary.theoretical_attempts)} попыток. Зарегистрировано: ${value(summary.attempts)}; verified: ${value(summary.verified)}. Пустых завершённых пачек: ${value(summary.empty)}; неполных: ${value(summary.partial)}; незахваченных слотов после срока: ${value(summary.missed)}.`:
+    report?.unavailable?'Диагностика времени недоступна; основные результаты показаны отдельно.':'Сохранённого плана для отчёта пока нет.';
+  $('timing-coverage').textContent='Вместимость не гарантирует подтверждения. Прочерк — нет измерения. Исторические попытки без телеметрии показаны по заданиям; переносимые повторы могут ограничивать точность привязки к слоту.'+(report?.diagnostics_truncated?' Выборка измерений ограничена.':'');
+  table('timing-slots',['Слот и границы YEKT','Фактические отметки YEKT','Сроки YEKT','Окно intent','Попытки / verified','Причина'],(report?.slots||[]).map(r=>{
+    const marks=text('div','','timing-marks');
+    for(const [label,key]of [['Захват','claimed_at'],['Счётчики','refresh_finished_at'],['Интервал готов','spacing_ready_at'],['Первый intent','first_action_at']])marks.append(text('div',`${label}: ${date(r[key],true)}`));
+    const bounds=text('div','','timing-marks'),limits=text('div','','timing-marks');
+    for(const [label,key]of [['Слот','S'],['Следующий','N'],['Конец дня','E']])bounds.append(text('div',`${label}: ${date(r[key],true)}`));
+    for(const [label,key]of [['Чтение','Dread'],['Новый intent','Dintent'],['Клик','click_deadline']])limits.append(text('div',`${label}: ${date(r[key],true)}`));
+    return [bounds,marks,limits,timingSeconds(r.intent_seconds_available),`${value(r.attempts)} / ${value(r.verified)}`,timingReason(r)];
+  }));
+  const names={browser_open:'Открытие браузера',source_navigation:'Переход к источнику',source_guard:'Проверка источника и аккаунта',community_prepare:'Подготовка сообщества',click:'Финальный клик',confirmation:'Подтверждение',cooldown:'Обязательная пауза'};
+  table('timing-stages',['Этап','Полных / прерванных измерений','Медиана','p95'],Object.entries(report?.stages||{}).map(([key,r])=>[names[key]||key,`${value(r.samples)} / ${value(r.failed_samples)}`,timingSeconds(r.median_ms===null?null:r.median_ms/1000),timingSeconds(r.p95_ms===null?null:r.p95_ms/1000)]));
+}
 function action(label,run,cls='outline'){const b=text('button',label,cls);b.type='button';b.onclick=async()=>{if(busy)return;b.disabled=true;busy=true;$('error').hidden=true;try{await run();}catch(e){showError(e.message);}finally{b.disabled=false;busy=false;}};return b;}
 function reportAccountCheck(accountId) {
   const account = (snapshot?.accounts || []).find(row => row.account === accountId);
@@ -444,7 +476,7 @@ globalThis.addEventListener?.('message', event => {
 
 function renderPosts(posts){const selected=$('post-group').value;const group=(snapshot?.groups||[]).find(row=>String(row.id)===selected);$('posts-heading').textContent=selected?`До 100 последних публикаций: ${group?.name||selected}`:'Последние 100 публикаций каталога';$('posts-caption').textContent=selected?'Последние публикации выбранной группы из кеша API. Прочерк означает неизвестное значение.':'Общая последняя выборка каталога. Выберите группу для её 100 последних публикаций. Прочерк означает неизвестное значение.';table('posts-table',['Публикация YEKT','Группа','Источник','Лайки','Комментарии','Репосты','Просмотры','Наблюдение YEKT'],posts.slice(0,100).map(p=>[date(p.published_at,true),p.group_name||p.group_id,source(p),p.like_count,p.comment_count,p.repost_count,p.view_count,date(p.observed_at,true)]));}
 function renderWorkerState(){if(!snapshot)return;const s=snapshot.scheduler||{};const heartbeat=workerHeartbeat(s.heartbeat);$('heartbeat').textContent=`Последний сигнал: ${date(heartbeat.at,true)} YEKT · ${heartbeat.freshnessText} · данные backend: ${date(snapshot.now,true)}`;$('worker-state').textContent=heartbeat.stateText;$('worker-state').className='muted worker-state '+heartbeat.state;$('worker-phase').textContent=`Этап: ${heartbeat.phaseText}`;$('worker-mode').textContent=`Режим: ${heartbeat.modeText}`;}
-function render(){const s=snapshot.scheduler||{};const windowNode=$('work-window');if(windowNode)windowNode.textContent=scheduleWindowText(s);$('execution-host').textContent=`Исполнение: ${snapshot.execution_host||'Windows VM'}`;renderWorkerState();$('safety-state').textContent=`${s.paused?`Пауза: ${typeof s.paused==='string'?s.paused:'защитная остановка'}. `:''}Активных uncertain: ${value(s.active_uncertain)} · Изолировано постов: ${value(s.isolated_posts)}${actionRetrySummary(s.action_retry)}`;$('policy-day').textContent=`Лимиты — ${s.policy_effective_day||'с первого не запланированного дня'}`;const selected=$('job-account').value;$('job-account').replaceChildren(new Option('Все',''));for(const a of snapshot.accounts||[])$('job-account').add(new Option(`${a.name} · №${a.account}`,a.account));$('job-account').value=selected;fillGroupFilters();renderJobs();renderTimeline();renderAccounts();if(!$('post-group').value)renderPosts(snapshot.posts||[]);else if(loadedGroupPosts.id===$('post-group').value)renderPosts(loadedGroupPosts.posts);else renderPosts([]);renderGroups();$('updated').textContent=`Обновлено ${new Date().toLocaleTimeString('ru-RU')}`;}
+function render(){const s=snapshot.scheduler||{};const windowNode=$('work-window');if(windowNode)windowNode.textContent=scheduleWindowText(s);$('execution-host').textContent=`Исполнение: ${snapshot.execution_host||'Windows VM'}`;renderWorkerState();$('safety-state').textContent=`${s.paused?`Пауза: ${typeof s.paused==='string'?s.paused:'защитная остановка'}. `:''}Активных uncertain: ${value(s.active_uncertain)} · Изолировано постов: ${value(s.isolated_posts)}${actionRetrySummary(s.action_retry)}`;$('policy-day').textContent=`Лимиты — ${s.policy_effective_day||'с первого не запланированного дня'}`;const selected=$('job-account').value;$('job-account').replaceChildren(new Option('Все',''));for(const a of snapshot.accounts||[])$('job-account').add(new Option(`${a.name} · №${a.account}`,a.account));$('job-account').value=selected;fillGroupFilters();renderJobs();renderTimeline();renderTiming();renderAccounts();if(!$('post-group').value)renderPosts(snapshot.posts||[]);else if(loadedGroupPosts.id===$('post-group').value)renderPosts(loadedGroupPosts.posts);else renderPosts([]);renderGroups();$('updated').textContent=`Обновлено ${new Date().toLocaleTimeString('ru-RU')}`;}
 async function refresh(){const result=await rpc('snapshot');snapshot=result;$('error').hidden=true;render();}
 function editAccount(account){
   const flexible=flexibleAccountFlow();

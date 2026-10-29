@@ -277,6 +277,9 @@ def snapshot():
                 'policy_effective_day':str(day),'coverage':state.get('scan_coverage'),
                 'last_diagnostic_error':state.get('last_diagnostic_error')}
             result['scheduler']['action_retry']=retry.summary()
+            import vk_scheduler_timing
+            try:result['scheduler']['timing']=vk_scheduler_timing.report(db,str(policy.local_day(now)),now)
+            except Exception:result['scheduler']['timing']={'unavailable':True,'slots':[],'summary':{},'stages':{}}
             result['jobs']=[dict(r) for r in db.execute('SELECT * FROM scheduler_jobs ORDER BY id DESC LIMIT 200')]
             for job in result['jobs']:job['recovery']=retry.job_snapshot(job['id'])
     for number in paths:

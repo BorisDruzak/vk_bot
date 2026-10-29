@@ -24,6 +24,7 @@ import vk_diagnostics as diagnostics
 import vk_scheduler_recovery as recovery
 import vk_accounts as accounts
 import vk_action_retry as action_retry
+import vk_scheduler_timing as timing
 
 ROOT=Path(__file__).resolve().parent
 STATE_PATH=ROOT/'vk_scheduler.sqlite3'
@@ -102,6 +103,43 @@ class Worker:
         self.sleeper=time.sleep
         self._active_slot=None
         self._reserve_deadline=None
+        self._timing_marks=None
+        self._timing_attempts=set()
+        self._timing_verified=set()
+
+    def observe_timing_event(self,event,job,**data):
+        """Memory only; telemetry cannot reserve, commit or authorize an action."""
+        try:
+            if self._timing_marks is None:return
+            if event=='attempt_reserved' and type(data.get('attempt_id')) is int:
+                self._timing_attempts.add((job,data['attempt_id']))
+            if event=='action_result' and data.get('outcome')=='verified':self._timing_verified.add(job)
+        except Exception:pass
+
+    def record_batch_attempt(self,job,aid):
+        self.state.record_attempt(job,aid)
+        self.observe_timing_event('attempt_reserved',job,attempt_id=aid)
+
+    def save_batch_timing(self,started,slot,phase):
+        try:
+            day=str(policy.local_day(started))
+            saved=self.state.db.execute('SELECT config,slots FROM schedule_days WHERE day=?',(day,)).fetchone()
+            if not saved:return
+            slots=json.loads(saved['slots'])
+            if type(slot) is not int or not 0<=slot<len(slots):return
+            batch=self.state.db.execute('SELECT * FROM scheduler_batches WHERE day=? AND slot=?',(day,slot)).fetchone()
+            if not batch:return
+            marks={**(self._timing_marks or {}),'claimed_at':batch['started_at'],'finished_at':batch['finished_at']}
+            last=self.state.get('last_action_batch')
+            if last and (last.get('day'),last.get('slot'))==(day,slot):marks['first_action_at']=last['at']
+            config=json.loads(saved['config'])
+            end=policy.work_bounds(started,config)[1]
+            window=timing.effective_window(slots[slot],slots[slot+1] if slot+1<len(slots) else None,end,
+                observations=marks,now=self.clock(),phase=phase,
+                reason='quota' if phase=='queue_empty' and not any(self.state.remaining(self.clock()).values()) else self.state.get('paused'))
+            window.update(attempts=len(self._timing_attempts),verified=len(self._timing_verified))
+            self.state.log_event('batch_timing',self.clock(),slot=slot,effective_window=window)
+        except Exception:pass  # Missing diagnostics never change an execution outcome.
 
     def status(self,phase,**extra):
         now=self.clock();plan=self.state.day_plan(now)
@@ -315,12 +353,14 @@ class Worker:
             return self.status('batch_already_claimed',attempted=0)
         self._active_slot=slot
         self.state._batch_boundary=self.batch_boundary(slot)
+        self._timing_marks={};self._timing_attempts=set();self._timing_verified=set()
         attempted=0;skipped=0;phase='batch_complete';reserve_refreshed=False
         self.state.log_event('batch_started',started,slot=slot)
         try:
             refresh_phase=self.prepare_batch_pool(slot)
             if refresh_phase=='counter_refresh_empty' and self._batch_refresh.get('band')=='new':
                 reserve_refreshed=True;refresh_phase=self.prepare_batch_pool(slot,reserve=True)
+            self._timing_marks['refresh_finished_at']=self.clock()
             if refresh_phase:
                 phase=refresh_phase;return self.status(phase,attempted=0)
             try:wait_phase=self.wait_batch_spacing(slot)
@@ -330,6 +370,7 @@ class Worker:
                 self.state.pause(reason);wait_phase='attention'
             if wait_phase:
                 phase=wait_phase;return self.status(phase,attempted=0)
+            self._timing_marks['spacing_ready_at']=self.clock()
             for _ in range(8):
                 if attempted>=self.state.config['batch_size']:break
                 if policy.local_day(self.clock())!=policy.local_day(started):
@@ -374,12 +415,13 @@ class Worker:
                 try:
                     context={'job':job,'account':account,'kind':kind,'community':target,'source_group':row['group_id'],'source_post':row['post_id'],'slot':slot}
                     def log_action(event,**data):
+                        self.observe_timing_event(event,job,**data)
                         self.pulse_action(event,job=job,stage=data.get('stage'))
                         self.state.log_event(event,self.clock(),**context,**data)
                     log_action('action_started')
                     result=actions.execute_action(account,kind,{**row,'community_id':target},
                         before_attempt=lambda:self.state.before_attempt(job,self.clock()),
-                        record_attempt=lambda aid:self.state.record_attempt(job,aid),
+                        record_attempt=lambda aid:self.record_batch_attempt(job,aid),
                         before_click=lambda:self.state.click_timeout(job,self.clock()),config_path=self.config_path,diagnostic=log_action)
                     status=result['status']
                     if status=='skipped_vk':
@@ -419,6 +461,8 @@ class Worker:
             self._batch_pool=None;self._batch_refresh={};self._reserve_deadline=None;self.state._batch_boundary=None;self.state._batch_clock=None
             self.state.finish_batch(self.clock(),slot,phase,day=policy.local_day(started))
             self.state.log_event('batch_result',self.clock(),slot=slot,phase=phase)
+            self.save_batch_timing(started,slot,phase)
+            self._timing_marks=None
             self._active_slot=None
         return self.status(phase,attempted=attempted,skipped_vk=skipped)
 

@@ -26,6 +26,7 @@ import vk_groups as groups
 import vk_unified as app
 import vk_action_availability as availability
 import vk_diagnostics as diagnostics
+import vk_action_timing as action_timing
 
 
 class ScheduledActionStopped(engine.StopRun):
@@ -43,14 +44,17 @@ class ScheduledActionStopped(engine.StopRun):
         super().__init__(message)
 
 
-def source_ready(page,gid,pid,stamp,guard):
+def source_ready(page,gid,pid,stamp,guard,*,timings=None):
     """Navigate once; allow exact metadata to hydrate without retrying a send.
 
     A visible root is not proof its date has arrived. Missing metadata may be
     polled for up to nine seconds; conflicting/mismatched dates fail at once.
     Every read rechecks identity/platform protection. No fallback date is used.
     """
-    try:engine.go_to_post(page,gid,pid)
+    if timings is None:timings=getattr(guard,'__dict__',{}).get('stage_timings')
+    try:
+        with action_timing.measure(timings,'source_navigation'):
+            engine.go_to_post(page,gid,pid)
     except engine.PlatformRateLimited:raise
     except (engine.StopRun,PlaywrightError) as exc:
         raise ScheduledActionStopped('source_navigation',str(exc)) from exc
@@ -79,7 +83,7 @@ class _SingleBudget:
     """A single durable reservation, recorded in existing report ledgers."""
     def __init__(self, db, kind, gid, pid, community_id, run_id, guard,
                  before_attempt, record_attempt, before_click=None,diagnostic=None,
-                 recovery_attempt_id=None,recovery_guard=None):
+                 recovery_attempt_id=None,recovery_guard=None,stage_timings=None):
         self.db,self.kind,self.gid,self.pid=db,kind,gid,pid
         self.community_id,self.run_id=community_id,run_id
         self.guard,self.before_attempt,self.record_attempt=guard,before_attempt,record_attempt
@@ -90,6 +94,7 @@ class _SingleBudget:
         self.diagnostic=diagnostic
         self.recovery_attempt_id=recovery_attempt_id
         self.recovery_guard=recovery_guard
+        self.stage_timings=stage_timings
         if before_click is None:self.final_click_timeout=None
         else:
             def timeout():
@@ -258,6 +263,7 @@ def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=
         raise engine.StopRun('Сохранённый профиль отсутствует; сначала --check-account')
     db_path=engine.DB_PATH if account==1 else smoke.ACCOUNT2_DB if account==2 else accounts.database_for_account(account)
     result={'status':'pending','attempt_id':None}
+    timings=action_timing.StageTimings()
     with ExitStack() as stack:
         stack.enter_context(app.exclusive_run())
         if account!=1 or not accounts.uses_primary_profile_lock(account):stack.enter_context(accounts.exclusive_profile(account))
@@ -300,14 +306,17 @@ def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=
             if budget is not None and budget.attempt_id is not None and not cooled:
                 print('[ACTION PAUSE] sleep 20 секунд после попытки',flush=True)
                 report('cooldown_started',stage='cooldown')
-                time.sleep(20);cooled=True
+                with timings.measure('cooldown'):
+                    time.sleep(20)
+                cooled=True
                 report('cooldown_finished',stage='cooldown')
         try:
             stage='browser_open'
             report('action_stage')
             with sync_playwright() as pw:
-                context=pw.chromium.launch_persistent_context(user_data_dir=str(profile),headless=False,
-                    locale='ru-RU',viewport={'width':1320,'height':900})
+                with timings.measure('browser_open'):
+                    context=pw.chromium.launch_persistent_context(user_data_dir=str(profile),headless=False,
+                        locale='ru-RU',viewport={'width':1320,'height':900})
                 page=None
                 try:
                     page=context.new_page()
@@ -316,12 +325,14 @@ def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=
                     engine.configure_navigation_pacing(page,max(20,cfg['read_pause_seconds']),db=db)
                     def guard():
                         try:
-                            engine.ensure_ok(page)
-                            community.live_identity(context,identity)
+                            with timings.measure('source_guard'):
+                                engine.ensure_ok(page)
+                                community.live_identity(context,identity)
                         except PlaywrightError as exc:
                             # Identity/protection probes are guards, even when
                             # called from inside process_one's confirmation path.
                             raise ScheduledActionStopped('source_guard','Не удалось проверить точный аккаунт и защиты VK') from exc
+                    guard.stage_timings=timings
                     def check_source():
                         nonlocal stage
                         stage='source_navigation'
@@ -330,7 +341,8 @@ def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=
                         source_ready(page,gid,pid,stamp,guard)
                         stage='source_date_read'
                         report('action_stage')
-                    budget=_SingleBudget(db,kind,gid,pid,destination,run_id,guard,before_attempt,record_attempt,before_click,report)
+                    budget=_SingleBudget(db,kind,gid,pid,destination,run_id,guard,before_attempt,record_attempt,before_click,report,
+                                         stage_timings=timings)
                     check_source()
                     recovering=recovery_attempt_id is not None
                     if recovering and kind=='community':
@@ -342,8 +354,9 @@ def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=
                         community.remember_reference(db,gid,pid,reference['group_id'],reference['post_id'])
                         stage='community_confirm'
                         try:
-                            found=community.ui.confirm_destination(page,reference['group_id'],reference['post_id'],destination,
-                                                                   not_before=recovery_stamp)
+                            with timings.measure('confirmation'):
+                                found=community.ui.confirm_destination(page,reference['group_id'],reference['post_id'],destination,
+                                                                       not_before=recovery_stamp)
                         except community.ui.CommunityConfirmationError as exc:
                             guard()
                             if exc.reason_code!='community_confirmation_timeout':raise
@@ -355,7 +368,8 @@ def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=
                             result.update(status='verified',target_post_id=found['post_id'])
                     elif recovering:
                         stage='personal_action'
-                        observed=_recovery_personal_state(page,gid,pid,kind,guard)
+                        with timings.measure('confirmation'):
+                            observed=_recovery_personal_state(page,gid,pid,kind,guard)
                         if observed=='verified':
                             engine.status_write(db,gid,pid,action,'verified','Свежая точная проверка предыдущей попытки')
                             result['status']='verified'
@@ -364,7 +378,8 @@ def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=
                                 if _recovery_personal_state(page,gid,pid,kind,guard)!='retry':
                                     raise engine.StopRun('Отрицательное состояние лайка изменилось перед повтором')
                             budget=_SingleBudget(db,kind,gid,pid,destination,run_id,guard,before_attempt,record_attempt,before_click,report,
-                                                 recovery_attempt_id=recovery_attempt_id,recovery_guard=recovery_guard)
+                                                 recovery_attempt_id=recovery_attempt_id,recovery_guard=recovery_guard,
+                                                 stage_timings=timings)
                             post=dict(db.execute('SELECT * FROM posts WHERE group_id=? AND post_id=?',(gid,pid)).fetchone())
                             post['like_status']='pending'  # Virtual only; durable state stays uncertain.
                             engine.process_one(page,db,gid,post,0,safety=budget,actions={action},already_open=True)
@@ -406,11 +421,13 @@ def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=
                                 return result
                             stage='community_prepare'
                             report('action_stage')
-                            proof=community.ui.prepare(page,gid,pid,destination,identity_guard=guard)
+                            with timings.measure('community_prepare'):
+                                proof=community.ui.prepare(page,gid,pid,destination,identity_guard=guard)
                             booked=[]
                             def reserve():
                                 budget.reserve(pid,'repost')
                                 booked.append(int(datetime.now(timezone.utc).timestamp()))
+                            reserve.safety=budget
                             try:
                                 stage='community_submit'
                                 report('action_stage')
@@ -421,7 +438,9 @@ def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=
                                 raise engine.StopRun('Финальная отправка не имеет единственной сохранённой попытки')
                             stage='community_confirm'
                             report('action_stage')
-                            found=community.ui.confirm_destination(page,cg,cp,destination,not_before=booked[0]);guard()
+                            with timings.measure('confirmation'):
+                                found=community.ui.confirm_destination(page,cg,cp,destination,not_before=booked[0])
+                            guard()
                             target=found['post_id'];community.write_state(db,destination,gid,pid,'verified',target_post_id=target)
                             result.update(status='verified',target_post_id=target)
                     else:
@@ -477,6 +496,9 @@ def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=
             except Exception:pass
             raise
         finally:
-            outcome='complete' if result['status']=='verified' else 'partial'
-            db.execute(f'UPDATE {run_table} SET finished_at=?,result=? WHERE id=?',(engine.moment(),outcome,run_id));db.commit()
+            try:
+                outcome='complete' if result['status']=='verified' else 'partial'
+                db.execute(f'UPDATE {run_table} SET finished_at=?,result=? WHERE id=?',(engine.moment(),outcome,run_id));db.commit()
+            finally:
+                timings.flush(diagnostic)
     return result

@@ -310,3 +310,15 @@ CSV-отчёты (`vk_actions_results.csv`, `vk_actions_results_account_2.csv`, 
 ## Уточнение v6.28: подтверждение community после отправки
 
 `vk_scheduled_action` после единственной сохранённой попытки и обязательного sleep20 вызывает `vk_community_ui.confirm_destination`. Одна навигация, затем ограниченные9сек DOM-чтения без reload/scroll/submit; точные owner/source/date обязательны. Таймаут и неоднозначность сохраняют uncertain. Фиксированные безопасные коды в scheduler обозначают этап сбоя; сырые сообщения/DOM не пишутся. Вручную подтверждённый по запросу пользователя старый uncertain согласуется с ledger без новой попытки, с локальным аудитом и сохранением расхода квоты. Такой разбор не является автоматическим снятием будущих ограничений.
+# Диагностика времени — issue #4 (29 октября 2026)
+
+`vk_scheduler_timing` вычисляет фиксированные effective windows и read-only
+отчёт по сохранённым слотам/диагностике. Worker наблюдает claim/refresh/spacing
+и durable reservations; batch_timing сохраняется после завершения пачки.
+`vk_action_timing` буферизует monotonic spans семи этапов до cleanup;
+`vk_diagnostics` пропускает только типизированные события и поля.
+`vk_control.snapshot` отдаёт scheduler.timing в раскрываемый отчёт web/app.js.
+`vk_schedule_simulation` использует реальные Worker/State/RetryLedger в
+временных базах с FakeClock и синтетическими внешними адаптерами.
+Диагностика не предоставляет разрешения на действие и не меняет guards/plans.
+См. SCHEDULER_TIMING_DIAGNOSTICS_2026_10_29.md.

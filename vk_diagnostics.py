@@ -26,6 +26,7 @@ FILES={'vk_batch.py','vk_scheduler.py','vk_scheduler_state.py','vk_scheduled_act
        'vk_community_ui.py','vk_action_availability.py','vk_batch_engagement.py','vk_catalog_scan.py','vk_api_read.py',
        'vk_groups.py','vk_unified.py','vk_accounts.py','vk_account_smoke.py','vk_scheduler_recovery.py'}
 EVENTS={'action_started','action_stage','attempt_reserved','final_click_check','cooldown_started','cooldown_finished',
+        'batch_timing','stage_timing',
         'public_read_retry',
         'action_result','action_failed','network_response','network_failed','batch_started','batch_result','phase',
         'counter_progress','scheduler_failed','diagnostics_write_failed','diagnostics_event_invalid','technical_recovery','cleanup_warning',
@@ -98,6 +99,12 @@ def make_record(event,*,now=None,error=None,observation=None,**data):
         elif key=='endpoint' and value in ('like_ui','wall_ui','likes_add','wall_repost'):out[key]=value
         elif key=='network_error' and type(value) is str and value in NETWORK_ERRORS:out[key]=value
         elif key=='request_method' and value in ('GET','POST'):out[key]=value
+        elif key=='effective_window' and event=='batch_timing':
+            from vk_scheduler_timing import sanitize_window
+            out[key]=sanitize_window(value)
+        elif key=='timing_stage' and value in ('browser_open','source_navigation','source_guard','community_prepare','click','confirmation','cooldown'):out[key]=value
+        elif key=='timing_outcome' and value in ('complete','failed'):out[key]=value
+        elif key=='duration_ms' and type(value) is int and 0<=value<=2**53-1:out[key]=value
     if observation is not None:out['observation']=sanitize_observation(observation)
     if error is not None:out['error_chain']=error_chain(error)
     out.update(read_trace.sanitize_summary(data))

@@ -36,6 +36,10 @@
 .slot.skipped,.dot.skipped{background:#8b7da8}.dot.running{background:var(--blue)}
 
 .slot.partial,.dot.partial{background:#6a94b7}
+.timing-panel{margin:18px 0}.timing-panel summary{cursor:pointer;font-weight:600;padding:8px 0}
+#timing-slots table{min-width:1050px}#timing-slots td:last-child{min-width:230px;max-width:370px;white-space:normal}
+#timing-slots{max-height:540px;overflow:auto}#timing-slots th{position:sticky;top:0;z-index:1}
+.timing-marks{font-size:12px;line-height:1.7;white-space:nowrap}
 
 #analytics .analytics-filters{display:flex;gap:18px;flex-wrap:wrap;align-items:end;margin:16px 0}
 #analytics .analytics-filters label{min-width:180px;max-width:100%;flex:1}

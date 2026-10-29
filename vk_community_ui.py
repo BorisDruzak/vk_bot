@@ -15,6 +15,7 @@ from playwright.sync_api import Error as PlaywrightError
 
 import vk_batch as engine
 import vk_groups as multi
+import vk_action_timing as action_timing
 
 
 _PREPARED = WeakKeyDictionary()
@@ -245,13 +246,16 @@ def prepare(page, source_group_id: int, source_post_id: int, community_id: int,
         raise engine.StopRun('Диалог сообщества не подтвердился; публикации не было') from exc
 
 
-def submit(page, prepared: dict, *, before_publish, identity_guard=None, before_final_click=None) -> None:
+def submit(page, prepared: dict, *, before_publish, identity_guard=None, before_final_click=None, timings=None) -> None:
     """Recheck proof, persist the attempt, then click exactly once. No retry."""
     saved = _PREPARED.pop(page, None)
     if not isinstance(prepared, dict) or saved is None or prepared != saved[0]:
         raise engine.StopRun('Нет действующей подготовки этого диалога и сообщества')
     if not callable(before_publish):
         raise engine.StopRun('Нет обязательного сохранения попытки перед публикацией')
+    if timings is None:
+        safety=getattr(before_publish,'__dict__',{}).get('safety')
+        timings=vars(safety).get('stage_timings') if safety is not None else None
     proof, dialog, final_handle = saved
     try:
         if identity_guard is not None:
@@ -265,7 +269,8 @@ def submit(page, prepared: dict, *, before_publish, identity_guard=None, before_
         # state after it; a failure now remains a consumed, uncertain attempt.
         _check_destination(page, proof, dialog, final_handle)
         timeout=engine._final_click_timeout(before_final_click,default_ms=9000)
-        final_handle.click(timeout=timeout)
+        with action_timing.measure(timings,'click'):
+            final_handle.click(timeout=timeout)
         engine.ensure_ok(page)
     except PlaywrightError as exc:
         raise engine.StopRun('Финальная публикация не подтверждена; автоматический повтор запрещён') from exc
