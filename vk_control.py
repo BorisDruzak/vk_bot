@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 import uuid
+from collections import Counter
 from contextlib import closing,contextmanager,ExitStack
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -299,6 +300,8 @@ def snapshot():
     for prefix,cfg in (('',effective),('pending_',pending)):
         result['scheduler'][prefix+'batch_size']=cfg['batch_size']
         result['scheduler'][prefix+'batch_count']=policy.batch_count(cfg)
+        distribution=Counter(policy.batch_attempt_limit(cfg,i) for i in range(policy.batch_count(cfg)))
+        result['scheduler'][prefix+'batch_attempt_distribution']={str(size):count for size,count in distribution.items()}
     return result
 
 

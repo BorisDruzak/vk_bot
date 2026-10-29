@@ -371,15 +371,16 @@ class Worker:
             if wait_phase:
                 phase=wait_phase;return self.status(phase,attempted=0)
             self._timing_marks['spacing_ready_at']=self.clock()
+            attempt_limit=policy.batch_attempt_limit(self.state.config,slot)
             # Retain the legacy eight selections; larger batches keep a bounded
             # allowance for already/proven-unavailable candidates without spending attempts.
-            for _ in range(max(8,2*self.state.config['batch_size'])):
-                if attempted>=self.state.config['batch_size']:break
+            for _ in range(max(8,2*attempt_limit)):
+                if attempted>=attempt_limit:break
                 if policy.local_day(self.clock())!=policy.local_day(started):
                     phase='batch_day_changed';break
                 if self.state.action_time_closed(self.clock()):
                     phase='batch_action_deadline';break
-                if (self.state.get('stop_requested',False) or attempted>=self.state.config['batch_size']
+                if (self.state.get('stop_requested',False) or attempted>=attempt_limit
                         or not policy.in_work_window(self.clock(),self.state.config)):
                     phase=self.batch_stop_phase(self.clock(),day=policy.local_day(started));break
                 retries=action_retry.RetryLedger(self.state)
@@ -408,7 +409,7 @@ class Worker:
                 except RuntimeError:
                     phase=self.batch_stop_phase(self.clock(),account,kind,target,day=policy.local_day(started));break
                 if retries.enabled:
-                    result=action_retry.execute_job(self,job,row,slot,self.state.config['batch_size']-attempted)
+                    result=action_retry.execute_job(self,job,row,slot,attempt_limit-attempted)
                     attempted+=result['attempted'];skipped+=result['skipped']
                     if result['phase']:
                         phase=('reserve_counter_refresh_deadline' if attempted and result['phase']=='counter_refresh_deadline'

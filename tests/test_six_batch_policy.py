@@ -69,15 +69,17 @@ class SixBatchPolicyTests(unittest.TestCase):
         self.assertEqual(policy.batch_count(restored),80)
         self.assertEqual(len(policy.build_schedule(date(2026,10,29),restored,rng=random.Random(2))),80)
 
-    def test_configured_future_template_derives_27_batches(self):
+    def test_configured_future_template_keeps_explicit_67_batches(self):
         configured=json.loads((Path(__file__).resolve().parents[1]/'vk_automation.json').read_text(encoding='utf-8'))
         config=policy.validate_config(configured['policy'])
         self.assertEqual((config['start_hour'],config['end_hour']),(9,22))
         self.assertEqual(policy.daily_total(config),160)
-        self.assertEqual(policy.batch_count(config),27)
+        self.assertEqual(policy.batch_count(config),67)
+        self.assertEqual(sum(policy.batch_attempt_limit(config,i) for i in range(67)),160)
 
     def test_registry_four_actor_overlay_derives_54_without_mutating_quotas(self):
         configured=json.loads((Path(__file__).resolve().parents[1]/'vk_automation.json').read_text(encoding='utf-8'))
+        configured['policy'].pop('planned_batches',None)
         registry={'version':1,'account_flow':'add_any','accounts':{
             str(number):{'account':number,'name':f'Actor {number}','enabled':True,'policy':quota(number)}
             for number in (1,2,5,6)}}

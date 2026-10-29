@@ -57,7 +57,7 @@ def validate_config(config=None) -> dict:
     """
     cfg=deepcopy(DEFAULT_CONFIG)
     if config is None:return cfg
-    if not isinstance(config,dict) or set(config)-set(cfg):
+    if not isinstance(config,dict) or set(config)-(set(cfg)|{'planned_batches'}):
         raise ValueError('Unknown or malformed schedule policy')
     for key,value in config.items():
         if key!='accounts':cfg[key]=deepcopy(value)
@@ -82,7 +82,16 @@ def validate_config(config=None) -> dict:
     total=sum(sum(a[key] for key in ('likes','personal_reposts','community_reposts'))
               for a in cfg['accounts'].values())
     window=(cfg['end_hour']-cfg['start_hour'])*3600
-    if ceil(total/cfg['batch_size'])>window//MIN_BATCH_GAP_SECONDS:
+    count=max(1,ceil(total/cfg['batch_size']))
+    if 'planned_batches' in cfg:
+        requested=cfg['planned_batches']
+        if type(requested) is not int or requested<count or (total>0 and requested>total):
+            raise ValueError('Planned batches must cover quotas with no empty targets')
+        count=requested
+        gaps=count-1
+        if gaps*MIN_BATCH_GAP_SECONDS+gaps*(gaps-1)//2>window-LAST_BATCH_RESERVE_SECONDS:
+            raise ValueError('Unique batch gaps cannot fit the configured work window')
+    if count>window//MIN_BATCH_GAP_SECONDS:
         raise ValueError('Configured batches cannot fit the work window safely')
     return cfg
 
@@ -130,7 +139,20 @@ def daily_total(config=None) -> int:
 def batch_count(config=None) -> int:
     """Number of batches; each has at most the configured <=6 attempts."""
     cfg=validate_config(config)
-    return max(1,ceil(daily_total(cfg)/cfg['batch_size']))
+    return cfg['planned_batches'] if 'planned_batches' in cfg else max(1,ceil(daily_total(cfg)/cfg['batch_size']))
+
+
+def batch_attempt_limit(config,slot) -> int:
+    """Saved slot's attempt target; legacy policies retain their full capacity.
+
+    An explicit slot count evenly distributes the daily quota using cumulative
+    integer boundaries. Missed or unused targets never enlarge another slot.
+    """
+    cfg=validate_config(config);count=batch_count(cfg)
+    if not _integer(slot,0,count-1):raise ValueError('Invalid batch slot index')
+    if 'planned_batches' not in cfg:return cfg['batch_size']
+    total=daily_total(cfg)
+    return (slot+1)*total//count-slot*total//count
 
 
 def slot_seconds(config=None) -> float:

@@ -1,7 +1,7 @@
 """Deterministic, offline timing experiments using the real Worker and State.
 
-Run ``python vk_schedule_simulation.py --six-batches``, ``--incident`` or
-``--input scenario.json``.
+Run ``python vk_schedule_simulation.py --congregation``, ``--five-accounts``,
+``--six-batches``, ``--incident`` or ``--input scenario.json``.
 With no arguments the saved80 plan from29 October is used. Input ``slots`` are
 aware ISO timestamps or local HH:MM:SS strings with ``day``. ``stages`` holds
 nonnegative duration samples, selected round-robin (default) or with a seeded
@@ -134,6 +134,39 @@ def six_batch_scenario(seed=29):
                 'refresh': 'one measured complete refresh120.341770s',
                 'after_reservation_model': '20s cooldown plus measured residual; click included in residual',
                 'live_four_of_four': 'separate29Oct acceptance observation; not a six-action live test'}}
+
+
+def five_account_scenario(seed=29):
+    """Synthetic future67x6 plan with five equal80-attempt account quotas.
+
+    Reuse the same measured timing model; actor7 and both its destinations are
+    synthetic. This factory does not connect, enable or inspect a live account.
+    """
+    scenario = six_batch_scenario(seed=seed)
+    scenario['policy']['accounts']['7'] = {
+        'likes': 50, 'personal_reposts': 10, 'community_reposts': 20,
+        'communities': [114, 115]}
+    config = policy.validate_config(scenario['policy'])
+    scenario['policy'] = config
+    scenario['slots'] = [_stamp(at) for at in policy.build_schedule(
+        date.fromisoformat(scenario['day']), config, rng=random.Random(seed))]
+    return scenario
+
+
+def congregation_scenario(seed=29):
+    """Synthetic67-slot plan: four80 quotas plus actor7's50/0/20 quota.
+
+    The390 attempts are allocated across the explicitly retained67 slots;
+    deadlines can still leave an allocation partially unused without catchup.
+    """
+    scenario = five_account_scenario(seed=seed)
+    scenario['policy']['accounts']['7']['personal_reposts'] = 0
+    scenario['policy']['planned_batches'] = 67
+    config = policy.validate_config(scenario['policy'])
+    scenario['policy'] = config
+    scenario['slots'] = [_stamp(at) for at in policy.build_schedule(
+        date.fromisoformat(scenario['day']), config, rng=random.Random(seed))]
+    return scenario
 
 
 def _instant(value, day):
@@ -410,6 +443,7 @@ def simulate(scenario=None):
     cfg = _config(scenario)
     slots = [_instant(value, day) for value in scenario.get('slots', SAVED80)]
     policy._validate_schedule(slots, cfg)
+    attempt_limits = [policy.batch_attempt_limit(cfg, slot) for slot in range(len(slots))]
     first, last = scenario.get('first_slot', 0), scenario.get('last_slot', len(slots) - 1)
     if type(first) is not int or type(last) is not int or not 0 <= first <= last < len(slots):
         raise ValueError('Invalid simulation slot range')
@@ -462,7 +496,8 @@ def simulate(scenario=None):
                         clock.advance_to(datetime.fromisoformat(previous['started_at']) + timedelta(seconds=540))
                         if previous['finished_at']:
                             clock.advance_to(datetime.fromisoformat(previous['finished_at']) + timedelta(seconds=20))
-                    batch = {'slot': slot, 'planned_at': _stamp(planned), 'boundary_at': _stamp(boundary),
+                    batch = {'slot': slot, 'attempt_limit': attempt_limits[slot],
+                             'planned_at': _stamp(planned), 'boundary_at': _stamp(boundary),
                              'intent_deadline': _stamp(boundary - timedelta(seconds=60)),
                              'refresh_deadline': _stamp(boundary - timedelta(seconds=120)),
                              'started_at': None, 'finished_at': None, 'refresh_finished_at': None,
@@ -497,7 +532,7 @@ def simulate(scenario=None):
                         'uncertain': sum(j['status'] == 'uncertain' for j in jobs),
                         'failed_without_attempt': sum(j['status'] == 'failed' and j['attempt_id'] is None for j in jobs),
                         'classification': ('missed' if not row else 'empty' if not attempts else
-                                           'complete' if attempts == cfg['batch_size'] else 'partial'),
+                                           'complete' if attempts == attempt_limits[slot] else 'partial'),
                         'next_slot_offset_seconds': round((clock() - slots[slot + 1]).total_seconds(), 6) if slot + 1 < len(slots) else None})
                     batches.append(batch)
             actor_attempts = {}
@@ -536,10 +571,12 @@ def simulate(scenario=None):
             'HTTP outcomes/eligibility are supplied model inputs, not transport proof.',
             'Historical action usage is empty unless produced during this simulation.'],
         'plan': {'slots': [_stamp(t) for t in slots], 'unchanged': True, 'batch_size': cfg['batch_size'],
+            **({'attempt_limits': attempt_limits} if 'planned_batches' in cfg else {}),
             'min_gap_seconds': min(gaps) if gaps else None, 'max_gap_seconds': max(gaps) if gaps else None,
             'unique_gaps': len(set(gaps))},
         'summary': {'theoretical_attempt_capacity': policy.daily_total(cfg),
             'simulated_slot_capacity': len(batches) * cfg['batch_size'],
+            'planned_attempt_capacity': sum(batch['attempt_limit'] for batch in batches),
             'attempts': sum(b['attempts'] for b in batches), 'verified': sum(b['verified'] for b in batches),
             'already': sum(b['already'] for b in batches), 'uncertain': sum(b['uncertain'] for b in batches),
             'complete': counts['complete'], 'partial': counts['partial'], 'empty': counts['empty'],
@@ -554,12 +591,16 @@ def main(argv=None):
     group.add_argument('--input', help='Scenario JSON file; - reads stdin')
     group.add_argument('--incident', action='store_true', help='Reproduce09:29 three-of-four example')
     group.add_argument('--six-batches', action='store_true', help='Model future54x6 with unchanged320 quotas')
+    group.add_argument('--five-accounts', action='store_true', help='Model future67x6 with five equal80-attempt quotas')
+    group.add_argument('--congregation', action='store_true', help='Model390 attempts across67 slots; fifth account50/0/20')
     args = parser.parse_args(argv)
     try:
         if args.input:
             scenario = json.load(sys.stdin) if args.input == '-' else json.loads(Path(args.input).read_text(encoding='utf-8'))
         else:
-            scenario = (six_batch_scenario() if args.six_batches else
+            scenario = (congregation_scenario() if args.congregation else
+                        five_account_scenario() if args.five_accounts else
+                        six_batch_scenario() if args.six_batches else
                         incident_scenario() if args.incident else default_scenario())
         print(json.dumps(simulate(scenario), ensure_ascii=False, indent=2))
         return 0

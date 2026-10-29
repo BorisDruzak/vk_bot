@@ -4,6 +4,7 @@
     "start_hour": 9,
     "end_hour": 22,
     "batch_size": 6,
+    "planned_batches": 67,
     "old_days": 7,
     "accounts": {
       "1": {

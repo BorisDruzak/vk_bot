@@ -24,10 +24,16 @@ function scheduleWindowText(scheduler) {
 // END schedule window helpers
 // BEGIN schedule batch helpers
 function scheduleBatchText(scheduler) {
-  const label=(size,count)=>Number.isInteger(size)&&size>0&&size<=6&&Number.isInteger(count)&&count>0
-    ? `до ${size} попыток в пачке, пачек за день: ${count}` : null;
-  const current=label(scheduler?.batch_size,scheduler?.batch_count);
-  const pending=label(scheduler?.pending_batch_size,scheduler?.pending_batch_count);
+  const label=(size,count,distribution)=>{
+    if(!Number.isInteger(size)||size<1||size>6||!Number.isInteger(count)||count<1)return null;
+    const entries=distribution&&typeof distribution==='object'&&!Array.isArray(distribution)?Object.entries(distribution):[];
+    const valid=entries.length>1&&entries.every(([s,n])=>/^[1-6]$/.test(s)&&Number(s)<=size&&Number.isInteger(n)&&n>0)&&
+      entries.reduce((sum,[,n])=>sum+n,0)===count;
+    const mix=valid?' ('+entries.sort(([a],[b])=>Number(b)-Number(a)).map(([s,n])=>`${n} × ${s}`).join(', ')+')':'';
+    return `до ${size} попыток в пачке, пачек за день: ${count}${mix}`;
+  };
+  const current=label(scheduler?.batch_size,scheduler?.batch_count,scheduler?.batch_attempt_distribution);
+  const pending=label(scheduler?.pending_batch_size,scheduler?.pending_batch_count,scheduler?.pending_batch_attempt_distribution);
   if(!current)return 'Размер пачек уточняется';
   return `Сегодня: ${current}`+(pending&&pending!==current
     ? ` · с ${scheduler.policy_effective_day||'первого нового дня'}: ${pending}` : '');
@@ -283,7 +289,7 @@ function renderTiming(){
   const report=snapshot?.scheduler?.timing,summary=report?.summary||{};
   if(!$('timing-summary'))return;
   $('timing-summary').textContent=report?.slots?.length?
-    `Теоретическая вместимость, мест для попыток: ${value(summary.theoretical_attempts)}. Дневная квота: ${value(summary.daily_quota)} попыток. Зарегистрировано: ${value(summary.attempts)}; verified: ${value(summary.verified)}. Пустых завершённых пачек: ${value(summary.empty)}; неполных: ${value(summary.partial)}; незахваченных слотов после срока: ${value(summary.missed)}.`:
+    `Теоретическая вместимость, мест для попыток: ${value(summary.theoretical_attempts)}. По плану: ${value(summary.planned_attempt_capacity)} мест для попыток. Дневная квота: ${value(summary.daily_quota)} попыток. Зарегистрировано: ${value(summary.attempts)}; verified: ${value(summary.verified)}. Пустых завершённых пачек: ${value(summary.empty)}; неполных: ${value(summary.partial)}; незахваченных слотов после срока: ${value(summary.missed)}.`:
     report?.unavailable?'Диагностика времени недоступна; основные результаты показаны отдельно.':'Сохранённого плана для отчёта пока нет.';
   $('timing-coverage').textContent='Вместимость не гарантирует подтверждения. Прочерк — нет измерения. Исторические попытки без телеметрии показаны по заданиям; переносимые повторы могут ограничивать точность привязки к слоту.'+(report?.diagnostics_truncated?' Выборка измерений ограничена.':'');
   table('timing-slots',['Слот и границы YEKT','Фактические отметки YEKT','Сроки YEKT','Окно intent','Попытки / мест · verified','Причина'],(report?.slots||[]).map(r=>{

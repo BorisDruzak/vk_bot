@@ -1,3 +1,15 @@
+# Final scope amendment29Oct2026
+
+User explicitly added a fifth actor, disabled its personal reposts, and retained
+exactly67future slots for390quota. Oldfour50/10/20 unchanged; fifth50/0/20.
+Optional planned_batches67 + maxbatch6 yields55six-targets and12five-targets.
+Every saved day (today4/80) and historicalpolicy withoutoverride remain unchanged.
+Policy/runner/retry/diagnostics/simulation tests cover balanced target caps.
+Current spec: docs/FIVE_ACCOUNTS_67_BATCHES_2026_10_29.md.
+Final fullsuite/review/mainCI/VMtests/deployment/identity gates pending.
+
+Previous plan follows as historical context:
+
 # Six-action future batches implementation plan
 
 **Goal:** authorized6-attempt batches/54daily batches for four unchanged80-attempt

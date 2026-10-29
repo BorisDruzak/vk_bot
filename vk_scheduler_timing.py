@@ -82,7 +82,7 @@ def report(db,day,now):
     saved=_rows(db,'SELECT config,slots FROM schedule_days WHERE day=?',(str(day),))
     if not saved:return {'day':str(day),'slots':[],'summary':{},'stages':{}}
     cfg=json.loads(saved[0]['config']);slots=json.loads(saved[0]['slots'])
-    capacity=cfg.get('batch_size',4)
+    maximum_capacity=cfg.get('batch_size',4)
     day_start=datetime.fromisoformat(str(day)).replace(tzinfo=policy.LOCAL_TZ)
     E=day_start.replace(hour=cfg.get('end_hour',19))
     batches={r['slot']:r for r in _rows(db,'SELECT * FROM scheduler_batches WHERE day=?',(str(day),))}
@@ -107,6 +107,7 @@ def report(db,day,now):
         elif r.get('event')=='stage_timing' and type(r.get('job')) is int and r['job'] in job_ids:stage_samples.append(r)
     result=[]
     for i,S in enumerate(slots):
+        capacity=policy.batch_attempt_limit(cfg,i)
         batch=batches.get(i);N=slots[i+1] if i+1<len(slots) else None
         observed=by_slot.get(i,{})
         marks={**observed,**({k:batch.get(k) for k in ('finished_at',)} if batch else {})}
@@ -129,7 +130,9 @@ def report(db,day,now):
     counts=Counter(r['status'] for r in result)
     return {'day':str(day),'slots':result,'stages':summarize(stage_samples),
             'diagnostics_truncated':truncated,
-            'summary':{'theoretical_attempts':len(slots)*capacity,'daily_quota':policy.daily_total(cfg),
+            'summary':{'theoretical_attempts':len(slots)*maximum_capacity,
+                       'planned_attempt_capacity':sum(r['batch_capacity'] for r in result),
+                       'daily_quota':policy.daily_total(cfg),
                        'attempts':sum(r['attempts'] for r in result),'verified':sum(j['status']=='verified' for j in jobs),
                        'missed':counts['missed'],'empty':sum(r['attempts']==0 and r['finished_at'] is not None for r in result),
-                       'partial':sum(0<r['attempts']<capacity and r['finished_at'] is not None for r in result)}}
+                       'partial':sum(0<r['attempts']<r['batch_capacity'] and r['finished_at'] is not None for r in result)}}
