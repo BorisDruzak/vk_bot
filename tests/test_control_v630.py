@@ -5,6 +5,7 @@ import unittest
 import subprocess
 from contextlib import closing
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import vk_accounts as accounts
@@ -49,7 +50,9 @@ class ControlTests(unittest.TestCase):
 
     def test_interactive_web_opens_login_as_same_user_without_task_admin(self):
         import vk_control as control
-        with patch.object(control,'desktop_session_id',return_value=2,create=True), \
+        with patch.object(control,'os',SimpleNamespace(name='nt')), \
+             patch.object(Path,'is_file',return_value=True), \
+             patch.object(control,'desktop_session_id',return_value=2,create=True), \
              patch.object(control.subprocess,'Popen') as spawn, \
              patch.object(control.subprocess,'run') as run:
             control.launch_login_task(1,'a'*32)
@@ -61,7 +64,9 @@ class ControlTests(unittest.TestCase):
 
     def test_ssh_session_uses_interactive_task_fallback(self):
         import vk_control as control
-        with patch.object(control,'desktop_session_id',return_value=0,create=True), \
+        with patch.object(control,'os',SimpleNamespace(name='nt')), \
+             patch.object(Path,'is_file',return_value=True), \
+             patch.object(control,'desktop_session_id',return_value=0,create=True), \
              patch.object(control.subprocess,'Popen') as spawn, \
              patch.object(control.subprocess,'run',return_value=subprocess.CompletedProcess([],0,b'',b'')) as run:
             control.launch_login_task(1,'b'*32)
