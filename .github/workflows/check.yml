@@ -13,7 +13,7 @@ jobs:
           - os: windows-latest
             python: '3.14'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 45
     env:
       PYTHONUTF8: '1'
     steps:
@@ -67,4 +67,4 @@ jobs:
       - name: Verify Node is available for frontend regressions
         run: node --version
       - name: Complete offline regression suite
-        run: python -m unittest discover -s tests -q
+        run: python -m unittest discover -s tests -v

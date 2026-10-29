@@ -70,6 +70,11 @@ policy41PASS, независимое ревью блокирующих заме�
 ## Проверка и установка
 
 Полный local discovery:1015тестов,0ошибок/пропусков,293.462с,Windows/Python3.14.3.
+Первый Windows CI для a0ea590 отменён ровно по прежнему25-минутному лимиту
+job: до полного discovery уже выполнялись отдельные overlapping-наборы.
+Именованных FAIL/ERROR до отмены нет; KeyboardInterrupt и WinError32 при уборке
+временной SQLite возникли после отмены. Лимит job увеличен до45мин, полный
+discovery переведён в verbose; состав проверок и runtime-код не изменены.
 node --check и git diff --check PASS; desktop1440×1000/mobile390×844,
 раздельные4/80→6/54,324places/320quota,4-я/6-я причины, no overflow/JS errors.
 Точные SHA/CI/VM-receipts дополняются после завершения установки.
