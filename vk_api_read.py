@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -27,6 +28,8 @@ import vk_read_trace as read_trace
 
 API_VERSION = '5.199'
 API_URL = 'https://api.vk.com/method/wall.get'
+_READ_METHOD_URLS = {'wall.get':API_URL,
+                    'utils.resolveScreenName':'https://api.vk.com/method/utils.resolveScreenName'}
 RATE_CODES = {6, 9, 29}
 API_SOURCE = 'vk-api-wall.get'
 PAGE_SIZE = 100
@@ -345,8 +348,13 @@ def api_scan_report(db, selected: list[dict], *,
 
 
 def _default_transport(params: dict) -> tuple[int, dict]:
-    body = urllib.parse.urlencode(params).encode('utf-8')
-    request = urllib.request.Request(API_URL, data=body,
+    if not isinstance(params,dict):raise ValueError('Invalid public read parameters')
+    supplied=dict(params);method=supplied.pop('_read_method','wall.get')
+    if type(method) is not str or method not in _READ_METHOD_URLS:
+        raise ValueError('Unsupported public read method')
+    body = urllib.parse.urlencode(supplied).encode('utf-8')
+    endpoint=API_URL if method=='wall.get' else _READ_METHOD_URLS[method]
+    request = urllib.request.Request(endpoint, data=body,
         headers={'Content-Type': 'application/x-www-form-urlencoded',
                  'User-Agent': 'VK-public-wall-read-client/1.0'}, method='POST')
     try:
@@ -474,6 +482,45 @@ class VKReadClient:
         if '_observed_at' in result:
             project_public_page(self.db,group_id,result,now=int(self.clock()))
         return result
+
+    def resolve_screen_name(self, alias: str) -> int:
+        """Resolve a fresh own-header alias to a user ID; never a wall cache read.
+
+        The caller owns the common read lease and supplies bounded transport.
+        No alias or response is persisted. This mapping alone is not login proof;
+        the caller must recheck the exact own-header alias in the same profile.
+        """
+        if (type(alias) is not str or
+                re.fullmatch(r'[A-Za-z][A-Za-z0-9_.]{0,63}',alias) is None):
+            raise ValueError('Invalid own-profile alias')
+        self._reserve(0)
+        read_result=None
+        try:
+            read_result=self.transport({'_read_method':'utils.resolveScreenName',
+                'screen_name':alias,'access_token':self.token,'v':API_VERSION})
+            status,payload=read_result
+            if status==429:raise VkApiLimited('VK API: HTTP 429')
+            if status!=200:raise VkApiFailure(f'VK API: HTTP {status}')
+            if not isinstance(payload,dict):raise VkApiFailure('VK API: unexpected identity response')
+            if 'error' in payload:
+                error=payload['error'] if isinstance(payload['error'],dict) else {}
+                code=error.get('error_code')
+                if type(code) is not int:raise VkApiFailure('VK API: invalid identity error code')
+                if code in RATE_CODES:raise VkApiLimited('VK API: read rate limit',code=code)
+                if code in (14,17):raise VkApiProtection('VK API: read protection required',code=code)
+                if code in (5,7,28):raise VkApiAuthFailure('VK API: identity read authorization failed',code=code)
+                raise VkApiFailure('VK API: identity method failed',code=code)
+            result=payload.get('response')
+            if (not isinstance(result,dict) or result.get('type')!='user' or
+                    type(result.get('object_id')) is not int or not 0<result['object_id']<=2**53-1):
+                raise VkApiFailure('VK API: exact user identity unavailable')
+            return result['object_id']
+        except VkApiFailure as exc:
+            if not getattr(exc,'read_diagnostics',None):
+                detail=read_trace.sanitize_summary(getattr(read_result,'read_diagnostics',None))
+                if detail:exc.read_diagnostics=detail
+            if isinstance(exc,VkApiLimited):engine.lock_on_platform_warning(self.db,0,str(exc))
+            raise
 
     def _wall_get_network(self, group_id: int, *, count: int, offset: int) -> dict:
         self._reserve(group_id)

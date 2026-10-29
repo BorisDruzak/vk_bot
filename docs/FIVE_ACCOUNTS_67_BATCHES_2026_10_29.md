@@ -151,6 +151,23 @@ schedule_days ради проверки. Реальные начала сохр�
 
 ## Установка
 
+29октября17:55:44YEKT установлен exactf32c868e3f612ec2a3944fc4c5884412417f7d64:
+[Offlinechecks](https://github.com/BorisDruzak/vk_bot/actions/runs/40873549419) и
+[OMSUanalytics](https://github.com/BorisDruzak/vk_bot/actions/runs/40873549364) SUCCESS.
+VMsource-only1048тестов PASS/0ошибок/24Node-skip/601.487сек, Python3.13.17,
+Playwright1.64.1.9файлов, POSoverlayvk_web.py не менялся. Backup11DB/integrityok,
+27JSON,151table/schema swapchecks; послеrestart11DB/139таблиц/схем сверены.
+ИсходныеTaskXML/enabledflags восстановлены. Worker6868/live/waiting_batch,
+pausedNULL/stopFalse, будущийsaved-slotgate18:04:38 безcatchup; jobs1190 сохранены.
+Все savedday/config/slots неизменны; today29Oct4/80/quota320.
+Read-onlyприёмка17:56:49: effective30Oct, future67/390/55×6+12×5,
+будущийdayplan ради проверки не создавался. Старые четыре записиреестра/квоты/
+bindings/история совпали; пятому сохранены50/0/20 и дваявныхназначения.
+Он остаётсяdisabled доfreshidentityproof: числовойIDвстаройшапке не определён,
+исправлениеaliasвхода проверяется отдельно. Реальныхдействийрадиприёмки0.
+Локальныеприватныеreceipts:outputs/congregation-67-2026-10-29/.
+Backup: C:\Users\vk-bot\vk_backups\congregation-67-20261029T122900Z.
+
 Только exactgreenartifact: source-onlyVMтесты, naturalquiescence, backupSQLite/
 config, сохранениеVM-onlyPOSoverlayvk_web.py, сверка всехстарыхschedule_days/
 slots/actorhistories/quotas, исходныхTaskXML и будущийsaved-slotgateбезcatchup.

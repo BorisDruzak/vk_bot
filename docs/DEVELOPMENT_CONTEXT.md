@@ -1,5 +1,16 @@
 # ПОЛНЫЙ КОНТЕКСТ РАЗРАБОТКИ — VK Unified / VK Bot
 
+29октября17:55:44YEKT: f32c868installed после exactgreenLinux/Windows+OMSUCI,
+VM1048/OK/24Node-skip/601.487с.11DB/integrityok+27JSONbackup,9files/POSoverlay
+untouched,151swapchecks/139postrestarttables+schemas. Today4/80/quota320,
+все saveddays/slots/старые4accountrecords/quotas/bindings/history сохранены.
+Future30Oct67/390/55six12five; fifth50/0/20saveddisabled(identitypending),
+новыйпланне созданрадиприёмки. Worker6868/live/waiting_batch,pausedNULL,
+stopFalse;futuregate18:04:38nocatchup. См.FIVE_ACCOUNTS_67_BATCHES_2026_10_29.md.
+Отдельно готовится exactown-headeralias→officialuserID подготовка доintent,
+общийledger/20s/pacing5/5000, ephemeralcontextproof/проверкипередкликом;
+установкаэтогоисправленияиenablefifthпокаожидаются. См.ACCOUNT_HEADER_ALIAS_2026_10_29.md.
+
 29октября: последнее прямое решение — пять аккаунтов,67пачек, общий390лимит.
 «Собрание»50/0/20 (личные репосты выключены), остальные четыре50/10/20.
 Явный planned_batches67 при batch_size6 даёт55слотов≤6 и12≤5; saved29Oct4/80

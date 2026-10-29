@@ -240,6 +240,10 @@ class Worker:
         boundary=self.batch_boundary(slot)
         return boundary-timedelta(seconds=120) if boundary is not None else self.clock()
 
+    def identity_read_deadline(self,slot):
+        boundary=self.batch_boundary(slot)
+        return boundary-timedelta(seconds=60) if boundary is not None else None
+
     def refresh_batch(self,*,reserve=False,deadline=None):
         if deadline is None and self._active_slot is not None:
             deadline=self.reserve_refresh_deadline(self._active_slot)
@@ -425,6 +429,8 @@ class Worker:
                     result=actions.execute_action(account,kind,{**row,'community_id':target},
                         before_attempt=lambda:self.state.before_attempt(job,self.clock()),
                         record_attempt=lambda aid:self.record_batch_attempt(job,aid),
+                        identity_read_deadline=self.identity_read_deadline(slot),
+                        before_identity_read=lambda:self.state.guard(self.clock(),account,kind,target),
                         before_click=lambda:self.state.click_timeout(job,self.clock()),config_path=self.config_path,diagnostic=log_action)
                     status=result['status']
                     if status=='skipped_vk':
@@ -450,10 +456,12 @@ class Worker:
                     _,end=policy.work_bounds(self.clock(),self.state.config)
                     normal_stop=(self.state.get('stop_requested',False) or
                         self.state.action_time_closed(self.clock()) or
+                        isinstance(exc,accounts.IdentityPreparationDeadline) or
                         isinstance(exc,ledger.BatchSpacingWait) or self.clock()>=end-timedelta(seconds=30)
                         or self.state.remaining(self.clock()).get((account,kind,target),0)<=0)
                     if not uncertain and normal_stop:
-                        phase=('batch_spacing_deadline' if isinstance(exc,ledger.BatchSpacingWait) else
+                        phase=('batch_action_deadline' if isinstance(exc,accounts.IdentityPreparationDeadline) else
+                               'batch_spacing_deadline' if isinstance(exc,ledger.BatchSpacingWait) else
                                self.batch_stop_phase(self.clock(),account,kind,target,day=policy.local_day(started)));break
                     if not uncertain:
                         deferred=self.defer_technical(exc,'action',dict(saved))

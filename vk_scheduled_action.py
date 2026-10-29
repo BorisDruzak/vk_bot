@@ -44,6 +44,13 @@ class ScheduledActionStopped(engine.StopRun):
         super().__init__(message)
 
 
+def prime_action_identity(context,*,deadline=None,before_request=None):
+    """Resolve an own-header alias before intent, under the caller's API lease."""
+    if accounts.inspect_context(context,attempts=4) is None:
+        accounts.prepare_context_identity(context,primary_lock_held=True,
+            deadline=deadline,before_request=before_request)
+
+
 def source_ready(page,gid,pid,stamp,guard,*,timings=None):
     """Navigate once; allow exact metadata to hydrate without retrying a send.
 
@@ -215,7 +222,8 @@ def _recovery_personal_state(page,gid,pid,kind,guard):
 
 
 def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=None,before_click=None,diagnostic=None,
-                   recovery_attempt_id=None,allow_retry_click=True):
+                   recovery_attempt_id=None,allow_retry_click=True,
+                   identity_read_deadline=None,before_identity_read=None):
     """Return status/attempt_id for exactly one like, personal or club repost.
 
     `row` needs exact API-certified group_id/post_id/published_at, and a positive
@@ -236,6 +244,11 @@ def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=
         raise ValueError('Нужны callbacks проверки и записи попытки')
     if before_click is not None and not callable(before_click):
         raise ValueError('before_click должен возвращать допустимый timeout финального клика')
+    if before_identity_read is not None and not callable(before_identity_read):
+        raise ValueError('before_identity_read должен быть callback без reservation')
+    if identity_read_deadline is not None and (not isinstance(identity_read_deadline,datetime)
+            or identity_read_deadline.tzinfo is None or identity_read_deadline.utcoffset() is None):
+        raise ValueError('Identity read deadline должен содержать timezone')
     if type(allow_retry_click) is not bool:raise ValueError('allow_retry_click должен быть bool')
     if recovery_attempt_id is not None and (type(recovery_attempt_id) is not int or recovery_attempt_id<=0):
         raise ValueError('Нужен точный ID предыдущей попытки')
@@ -323,10 +336,20 @@ def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=
                     engine.watch_rate_limit_responses(page)
                     diagnostics.watch_network(page,report)
                     engine.configure_navigation_pacing(page,max(20,cfg['read_pause_seconds']),db=db)
+                    identity_prepared=False
                     def guard():
+                        nonlocal identity_prepared
                         try:
                             with timings.measure('source_guard'):
                                 engine.ensure_ok(page)
+                                if not identity_prepared:
+                                    try:
+                                        prime_action_identity(context,deadline=identity_read_deadline,
+                                            before_request=before_identity_read)
+                                    except accounts.IdentityPreparationDeadline:raise
+                                    except (accounts.AccountError,api.VkApiFailure):
+                                        raise ScheduledActionStopped('source_guard','Не удалось подтвердить точный аккаунт') from None
+                                    identity_prepared=True
                                 community.live_identity(context,identity)
                         except PlaywrightError as exc:
                             # Identity/protection probes are guards, even when

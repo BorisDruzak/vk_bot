@@ -1,5 +1,12 @@
 # Final scope amendment29Oct2026
 
+Schedule milestone COMPLETE: f32c868installed17:55:44YEKT aftergreenCI,
+VM1048PASS/24Node-skip;11DB/139tablespostrestartpreserved;today4/80immutable,
+future30Oct67/390/55six12five;fifth50/0/20saveddisabled. Identityaliasfixis
+separatenewscope:1086localPASS/315.351s,38focusedPASS;API/read-onlycontext
+proofbeforeintent, typeuseronly;cross-tab/deadline/quota-confirmationreviewfixed.
+AuthfixmainCI/VMsource-onlytests/deployment/freshproof/enablepending.
+
 User explicitly added a fifth actor, disabled its personal reposts, and retained
 exactly67future slots for390quota. Oldfour50/10/20 unchanged; fifth50/0/20.
 Optional planned_batches67 + maxbatch6 yields55six-targets and12five-targets.

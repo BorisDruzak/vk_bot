@@ -90,6 +90,17 @@ class RetryLedger:
             raise RuntimeError('No owned action execution pass')
         return r,j
 
+    def before_identity_read(self,job,now):
+        """A confirmation read needs protection/window proof, not a new quota."""
+        r,j=self._running(job)
+        self.state.require_not_isolated(j['account'],j['group_id'],j['post_id'])
+        if r['passes']==2 and j['attempt_id'] is not None:
+            if (not self.state.account_enabled(j['account']) or self.state.get('stop_requested',False)
+                    or self.state.blocked()):
+                raise RuntimeError('Confirmation identity read is blocked')
+            return self.state.action_now(now,day=j['day'])
+        return self.state.guard(now,j['account'],j['kind'],j['community_id'])
+
     def before_attempt(self,job,now,slot):
         r,j=self._running(job)
         p=self.db.execute('SELECT * FROM scheduler_action_passes WHERE job_id=? AND pass=?',(job,r['passes'])).fetchone()
@@ -311,6 +322,8 @@ def execute_job(worker,job,row,slot,capacity):
                 'allow_retry_click':state.remaining(worker.clock()).get((j['account'],j['kind'],j['community_id']),0)>0}
             result=actions.execute_action(j['account'],j['kind'],{**row,'community_id':j['community_id']},
                 before_attempt=lambda:book.before_attempt(job,worker.clock(),slot),record_attempt=record,
+                identity_read_deadline=worker.identity_read_deadline(slot),
+                before_identity_read=lambda:book.before_identity_read(job,worker.clock()),
                 before_click=lambda:state.click_timeout(job,worker.clock()),config_path=worker.config_path,diagnostic=log,**options)
             outcome=result['status']
             if outcome in ('verified','already'):
@@ -338,13 +351,14 @@ def execute_job(worker,job,row,slot,capacity):
             if isinstance(exc,engine.ActionConfirmationError):state.set('last_action_confirmation',{'job':job,'at':worker.clock().isoformat(),'reason':reason,'observation':exc.observation})
             p=state.db.execute('SELECT * FROM scheduler_action_passes WHERE job_id=? AND pass=?',(job,r['passes'])).fetchone()
             _,end=policy.work_bounds(worker.clock(),state.config)
-            normal_stop=(state.get('stop_requested',False) or not state.account_enabled(current['account'])
+            identity_deadline=isinstance(exc,actions.accounts.IdentityPreparationDeadline)
+            normal_stop=(identity_deadline or state.get('stop_requested',False) or not state.account_enabled(current['account'])
                 or state.action_time_closed(worker.clock())
                 or worker.clock().timestamp()>=end.timestamp()-30
                 or state.remaining(worker.clock()).get((current['account'],current['kind'],current['community_id']),0)<=0)
-            if (type(exc) is RuntimeError or isinstance(exc,scheduler.ledger.BatchSpacingWait)) and normal_stop and not p['intent'] and p['attempt_id'] is None:
+            if (identity_deadline or type(exc) is RuntimeError or isinstance(exc,scheduler.ledger.BatchSpacingWait)) and normal_stop and not p['intent'] and p['attempt_id'] is None:
                 book.defer_unreserved(job,worker.clock())
-                return {'attempted':attempted,'phase':worker.batch_stop_phase(worker.clock(),current['account'],
+                return {'attempted':attempted,'phase':'batch_action_deadline' if identity_deadline else worker.batch_stop_phase(worker.clock(),current['account'],
                     current['kind'],current['community_id'],day=current['day']),'skipped':0}
             eligible=retryable(exc,current)
             # The actor ledger must match the just-completed pass, with no hidden new attempts.

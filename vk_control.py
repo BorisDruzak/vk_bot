@@ -187,6 +187,9 @@ def login_worker(account,session,*,check_only=False):
                 save('opening' if check_only else 'awaiting_login',browser_opened=True,page_loaded=loaded)
                 if check_only:
                     identity=accounts.inspect_context(context,attempts=15)
+                    if identity is None:
+                        identity=accounts.prepare_context_identity(context,
+                            primary_lock_held=accounts.uses_primary_profile_lock(account))
                     proof=authentication.observe(account,identity)
                     save('checked',detected=identity is not None,authentication=proof)
                     return 0 if proof['state']=='matched' else 2
@@ -195,6 +198,9 @@ def login_worker(account,session,*,check_only=False):
                     if accounts.account_enabled(account):raise accounts.AccountError('account_enabled')
                     if not context.pages:save('closed');return 1
                     identity=accounts.inspect_context(context,attempts=1)
+                    if identity is None:
+                        identity=accounts.prepare_context_identity(context,
+                            primary_lock_held=accounts.uses_primary_profile_lock(account))
                     if automatic:
                         if identity is not None:
                             target=connections.connect(account,identity,profile=launched_profile)
@@ -217,6 +223,9 @@ def login_worker(account,session,*,check_only=False):
                     finish=path.with_suffix('.finish.json')
                     if proof['can_finish'] and finish.exists() and json.loads(finish.read_text(encoding='utf-8')).get('session')==session:
                         identity=accounts.inspect_context(context,attempts=2)
+                        if identity is None:
+                            identity=accounts.prepare_context_identity(context,
+                                primary_lock_held=accounts.uses_primary_profile_lock(account))
                         if identity is None:continue
                         proof=authentication.observe(account,identity)
                         if not proof['can_finish']:continue

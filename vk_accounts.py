@@ -38,6 +38,17 @@ class AccountError(RuntimeError):
     """A conservative account/profile validation failure."""
 
 
+class IdentityPreparationDeadline(AccountError):
+    """No bounded identity read can fit before the caller's intent deadline."""
+
+
+def prepare_context_identity(context,*,primary_lock_held=False,deadline=None,before_request=None):
+    """Explicit pre-intent preparation; ordinary identity inspection stays offline."""
+    import vk_identity_alias
+    return vk_identity_alias.prepare_context_identity(context,primary_lock_held=primary_lock_held,
+        deadline=deadline,before_request=before_request)
+
+
 def profile_for_account(account: int) -> Path:
     if type(account) is not int or account not in account_numbers():
         raise ValueError('Нужен зарегистрированный положительный номер аккаунта')
@@ -326,7 +337,11 @@ def inspect_header_identity(page) -> int | None:
         candidates = page.locator(PROFILE_LINK)
         if candidates.count() != 1:
             return None
-        return vk_id_from_profile_href(candidates.first.get_attribute('href', timeout=2500))
+        href=candidates.first.get_attribute('href', timeout=2500)
+        number=vk_id_from_profile_href(href)
+        if number is not None:return number
+        import vk_identity_alias
+        return vk_identity_alias.prepared_header_identity(page,href)
     except (PWTimeout, PlaywrightError, AttributeError):
         return None
 
@@ -338,6 +353,14 @@ def inspect_context(context, attempts: int = 6) -> int | None:
     VK-hosted tab with the exact signed-in header control is accepted.
     """
     for i in range(attempts):
+        import vk_identity_alias
+        contextual,prepared=vk_identity_alias.prepared_context_identity(context)
+        if contextual:
+            if prepared is not None:return prepared
+            if i<attempts-1:
+                active=[p for p in context.pages if not p.is_closed()]
+                if active:active[-1].wait_for_timeout(1000)
+            continue
         found = set()
         for page in list(context.pages):
             number = inspect_header_identity(page)
@@ -372,6 +395,8 @@ def browser_inspect(account: int, interactive: bool, *, binding_path: Path = BIN
     def inspect_and_observe(context):
         try:
             observed = inspect_context(context)
+            if observed is None:
+                observed=prepare_context_identity(context,primary_lock_held=uses_primary_profile_lock(account))
         except AccountError:
             if authentication is not None:
                 authentication.observe(account, None)
