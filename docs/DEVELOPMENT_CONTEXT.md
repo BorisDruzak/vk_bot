@@ -1,11 +1,18 @@
 # ПОЛНЫЙ КОНТЕКСТ РАЗРАБОТКИ — VK Unified / VK Bot
 
-29октября: auth227f3da(1086tests/greenCI) НЕустановлен — живойstagedread
-utils.resolveScreenName вернул1051, bindings/history/runtimeсохранены.
-Выбран publicusers.get(alias,screen_name), exactsingleactiveuser+matchingalias;
-производственногоfallbackнет.107APIрегрессий/21aliasPASS,VM39targetPASS;
-полныепроверки/новыйCI/живаяпроверкадоступности/enableожидаются.
-Сама futurepolicy67/390 иfifth50/0/20ужеустановленыизf32c868.
+29октября19:43:55YEKT: auth088073a установлен19:42:34 после exactgreen
+Linux/Windows+OMSUCI, local1087PASS/312.555с,VM1087PASS/24Node-skip/618.533с.
+Одиночный stagedusers.get подтвердил exactown-headeralias; производственного
+fallbackнет.19:43:41 в интерактивнойVMсессии новыйfreshmatched, actor7
+«Собрание» подключён и включён50/0/20. Старые4records/quotas/bindings,
+19таблиц истории и всеsavedday/config/slots сохранены. Effective30Oct67/390,
+55×6+12×5; today29Oct4/80/quota320, будущийdayplan не создавалсярадиприёмки.
+Backup11DB/integrityok+27JSON;7files/151swapchecks/139postrestarttables;
+POSoverlay/favicon/TaskXML/flags сохранены. Worker3592/live/waiting_batch,
+pausedNULL/stopFalse, сохранённыйfuturegate19:52:08/no-catchup.
+См.ACCOUNT_HEADER_ALIAS_2026_10_29.md иFIVE_ACCOUNTS_67_BATCHES_2026_10_29.md.
+Промежуточныйauth227f3da сutils.resolveScreenName неустанавливался:1051
+вstagedпробе. Это исторический результат, финальныйметод — толькоusers.get.
 
 29октября17:55:44YEKT: f32c868installed после exactgreenLinux/Windows+OMSUCI,
 VM1048/OK/24Node-skip/601.487с.11DB/integrityok+27JSONbackup,9files/POSoverlay
@@ -14,14 +21,13 @@ untouched,151swapchecks/139postrestarttables+schemas. Today4/80/quota320,
 Future30Oct67/390/55six12five; fifth50/0/20saveddisabled(identitypending),
 новыйпланне созданрадиприёмки. Worker6868/live/waiting_batch,pausedNULL,
 stopFalse;futuregate18:04:38nocatchup. См.FIVE_ACCOUNTS_67_BATCHES_2026_10_29.md.
-Отдельно готовится exactown-headeralias→officialuserID подготовка доintent,
-общийledger/20s/pacing5/5000, ephemeralcontextproof/проверкипередкликом;
-установкаэтогоисправленияиenablefifthпокаожидаются. См.ACCOUNT_HEADER_ALIAS_2026_10_29.md.
+Exactown-headeralias→officialuserID подготовка доintent завершена отдельной
+установкой выше; общийledger/20s/pacing5/5000 и guards сохраняются.
 
 29октября: последнее прямое решение — пять аккаунтов,67пачек, общий390лимит.
 «Собрание»50/0/20 (личные репосты выключены), остальные четыре50/10/20.
 Явный planned_batches67 при batch_size6 даёт55слотов≤6 и12≤5; saved29Oct4/80
-не меняется. Установка/включение ждут exactgreenCI и свежего exactproof.
+не меняется. Установка/включение завершены после exactgreenCI и свежего exactproof.
 Подробности/пример времени67слотов:FIVE_ACCOUNTS_67_BATCHES_2026_10_29.md.
 
 29октября: по прямому запросу подготовлена futurepolicy6/54 для прежних

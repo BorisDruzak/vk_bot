@@ -1,11 +1,14 @@
 # Final scope amendment29Oct2026
 
-Schedule milestone COMPLETE: f32c868installed17:55:44YEKT aftergreenCI,
-VM1048PASS/24Node-skip;11DB/139tablespostrestartpreserved;today4/80immutable,
-future30Oct67/390/55six12five;fifth50/0/20saveddisabled. Identityaliasfixis
-separatenewscope:1086localPASS/315.351s,38focusedPASS;API/read-onlycontext
-proofbeforeintent, typeuseronly;cross-tab/deadline/quota-confirmationreviewfixed.
-AuthfixmainCI/VMsource-onlytests/deployment/freshproof/enablepending.
+Schedule and identity milestones COMPLETE: f32c868 schedule installed17:55:44,
+auth088073a installed19:42:34YEKT after exactgreenLinux/Windows+OMSUCI.
+Local1087PASS/312.555s,VM1087PASS/24Node-skip/618.533s;11DB/integrityok,
+27JSON/151swapchecks/139postrestarttables preserved. Today4/80immutable,
+future30Oct67/390/55six12five. Fresh interactive exactmatched19:43:41,
+fifthactor7 enabled50/0/20; oldfourrecords/quotas/bindings/history unchanged.
+Finalacceptance19:43:55PASS; worker3592/live/waiting_batch,pausedNULL,
+stopFalse/future saved-slot19:52:08/no-catchup. Onlyusers.get alias preparation;
+no production fallback. Intermediate227utils1051candidate never installed.
 
 User explicitly added a fifth actor, disabled its personal reposts, and retained
 exactly67future slots for390quota. Oldfour50/10/20 unchanged; fifth50/0/20.
@@ -13,7 +16,7 @@ Optional planned_batches67 + maxbatch6 yields55six-targets and12five-targets.
 Every saved day (today4/80) and historicalpolicy withoutoverride remain unchanged.
 Policy/runner/retry/diagnostics/simulation tests cover balanced target caps.
 Current spec: docs/FIVE_ACCOUNTS_67_BATCHES_2026_10_29.md.
-Final fullsuite/review/mainCI/VMtests/deployment/identity gates pending.
+Final fullsuite/review/mainCI/VMtests/deployment/identity gates passed.
 
 Previous plan follows as historical context:
 
