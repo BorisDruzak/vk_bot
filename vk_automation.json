@@ -1,0 +1,35 @@
+{
+  "policy": {
+    "timezone": "Asia/Yekaterinburg",
+    "start_hour": 9,
+    "end_hour": 22,
+    "batch_size": 4,
+    "old_days": 7,
+    "accounts": {
+      "1": {
+        "likes": 50,
+        "personal_reposts": 10,
+        "community_reposts": 20,
+        "communities": [
+          242481741,
+          242481697
+        ]
+      },
+      "2": {
+        "likes": 50,
+        "personal_reposts": 10,
+        "community_reposts": 20,
+        "communities": [
+          242479129,
+          242479058
+        ]
+      }
+    }
+  },
+  "scan": {
+    "daily_requests": 5000,
+    "refresh_minutes": 60,
+    "pages_per_group": 10,
+    "pause_seconds": 5
+  }
+}

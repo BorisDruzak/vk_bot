@@ -18,6 +18,8 @@ class AccountProfilesTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        for name,value in (('ROOT',self.root),('REGISTRY_PATH',self.root/'registry.json')):
+            setting=patch.object(accounts,name,value);setting.start();self.addCleanup(setting.stop)
         self.reg = self.root / 'vk_account_bindings.json'
         self.profile1 = self.root / '.vk-local-profile'
         self.profile2 = self.root / '.vk-local-profile-2'

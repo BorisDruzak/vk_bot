@@ -3,12 +3,26 @@
 .vk-local-profile-*/
 .vk-local-profile*/
 vk_account_bindings.json
+vk_account_registry.json
+.vk-login-*.json
+.vk-authentication-*.json
+.vk-statistics-refresh.json
+.vk-statistics-refresh.guard
+.vk-login-*.finish.json
+vk_web_auth.json
+vk_web_config.json
+vk_web_credentials.txt
+vk_account_registry.lock
+*.binding.lock
+vk_migration_profile_check.json
+vk_migration_*/
 *cookie*
 *Cookie*
 *session*.json
 *storage_state*.json
 
 # Secrets / OAuth
+api_keys.txt
 .env
 .env.*
 !.env.example
@@ -50,5 +64,20 @@ venv/
 .idea/
 .vscode/
 *.log
+tmp/
+outputs/
+analytics_local/
+.vk-analytics.guard
+.vk-analytics-runtime.json
+*.analytics.json
+*.analytics.py
+sosnovsky_registry.json
+*.before-omsu
 .DS_Store
 Thumbs.db
+.vk-scheduler.guard
+.vk-activity.guard
+
+*.pyc
+.vk-public-data.json
+vk_public_data.guard

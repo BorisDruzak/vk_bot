@@ -475,6 +475,62 @@
       "enabled": true,
       "like_enabled": true,
       "repost_enabled": true
+    },
+    {
+      "id": 217650410,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД №18 Д.КАЗАНЦЕВО\"",
+      "url": "https://vk.com/club217650410",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 204985110,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ ДЕТСКИЙ САД №10 П. ПОЛЕТАЕВО",
+      "url": "https://vk.com/club204985110",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 105705812,
+      "name": "МУНИЦИПАЛЬНОЕ УЧРЕЖДЕНИЕ ДОПОЛНИТЕЛЬНОГО ОБРАЗОВАНИЯ \"ДЕТСКО-ЮНОШЕСКАЯ СПОРТИВНАЯ ШКОЛА П. ПОЛЕТАЕВО\"",
+      "url": "https://vk.com/club105705812",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 204984903,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД №25 П.КРАСНОЕ ПОЛЕ\"",
+      "url": "https://vk.com/club204984903",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 199097909,
+      "name": "МУНИЦИПАЛЬНОЕ ОБЩЕОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"СЛАВИНСКАЯ НАЧАЛЬНАЯ ОБЩЕОБРАЗОВАТЕЛЬНАЯ ШКОЛА\"",
+      "url": "https://vk.com/club199097909",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 214241537,
+      "name": "МУНИЦИПАЛЬНОЕ ДОШКОЛЬНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ \"ДЕТСКИЙ САД №4 С. ДОЛГОДЕРЕВЕНСКОГО\"",
+      "url": "https://vk.com/club214241537",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
+    },
+    {
+      "id": 214835800,
+      "name": "МУНИЦИПАЛЬНОЕ УЧРЕЖДЕНИЕ \"СОСНОВСКИЙ СПОРТИВНО - ОЗДОРОВИТЕЛЬНЫЙ КОМПЛЕКС \"ОЛИМП\"",
+      "url": "https://vk.com/club214835800",
+      "enabled": true,
+      "like_enabled": true,
+      "repost_enabled": true
     }
   ],
   "scan_groups_per_run": 3,

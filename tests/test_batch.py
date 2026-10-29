@@ -68,7 +68,7 @@ class BatchDataTests(unittest.TestCase):
                     'liked': True, 'reposted': None, 'source': 'none',
                     'canLike': True, 'canRepost': None,
                 }), patch('vk_batch.click_share_then_publish') as share:
-                    with self.assertRaisesRegex(StopRun, 'состояние неизвестно'):
+                    with self.assertRaisesRegex(StopRun, 'guard_pre_action_state_unknown'):
                         process_one(fake, db, 188206921, row, 0)
                     share.assert_not_called()
                 stored = db.execute('SELECT repost_status FROM posts').fetchone()[0]
@@ -114,7 +114,7 @@ class BrowserJSFixtureTests(unittest.TestCase):
     def setUpClass(cls):
         cls.pw = sync_playwright().start()
         cls.browser = cls.pw.chromium.launch(headless=True,
-                    executable_path='/usr/bin/chromium', args=['--no-sandbox'])
+                    args=['--no-sandbox'])
 
     @classmethod
     def tearDownClass(cls):
@@ -265,7 +265,7 @@ class PostLocatorRegressionTests(unittest.TestCase):
     def setUpClass(cls):
         cls.pw = sync_playwright().start()
         cls.browser = cls.pw.chromium.launch(headless=True,
-                    executable_path='/usr/bin/chromium', args=['--no-sandbox'])
+                    args=['--no-sandbox'])
 
     @classmethod
     def tearDownClass(cls):
@@ -343,7 +343,7 @@ class StateRecoveryRegressionTests(unittest.TestCase):
     def setUpClass(cls):
         cls.pw = sync_playwright().start()
         cls.browser = cls.pw.chromium.launch(headless=True,
-                    executable_path='/usr/bin/chromium', args=['--no-sandbox'])
+                    args=['--no-sandbox'])
 
     @classmethod
     def tearDownClass(cls):
@@ -631,7 +631,7 @@ class V65LiveLabelAndRecoveryTests(unittest.TestCase):
         """Select VK's post footer, not a comment button carrying the same label."""
         from vk_batch import verified_like_button
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=True, executable_path='/usr/bin/chromium', args=['--no-sandbox'])
+            browser = pw.chromium.launch(headless=True, args=['--no-sandbox'])
             try:
                 page = browser.new_page()
                 page.set_content("""
@@ -663,7 +663,7 @@ class V65LiveLabelAndRecoveryTests(unittest.TestCase):
         """A generic Like label on a comment must never substitute for footer testid."""
         from vk_batch import verified_like_button
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=True, executable_path='/usr/bin/chromium', args=['--no-sandbox'])
+            browser = pw.chromium.launch(headless=True, args=['--no-sandbox'])
             try:
                 page=browser.new_page()
                 page.set_content("""
@@ -848,7 +848,7 @@ class WrongCommentLikeSafetyTests(unittest.TestCase):
     def test_missing_post_footer_fails_even_if_comment_like_is_visible(self):
         from vk_batch import verified_like_button
         with sync_playwright() as pw:
-            browser=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+            browser=pw.chromium.launch(headless=True,args=['--no-sandbox'])
             try:
                 page=browser.new_page()
                 page.set_content('''<section id="page-single-post"><div><article id="post-188206921_13376">
@@ -863,7 +863,7 @@ class WrongCommentLikeSafetyTests(unittest.TestCase):
     def test_comment_share_is_not_same_toolbar_as_main_post(self):
         from vk_batch import post_footer_info
         with sync_playwright() as pw:
-            browser=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+            browser=pw.chromium.launch(headless=True,args=['--no-sandbox'])
             try:
                 page=browser.new_page(viewport={'width':1000,'height':750})
                 page.set_content('''<section id="page-single-post"><div><article id="post-188206921_13376">
@@ -883,7 +883,7 @@ class RealVkLongPostRegressionTests(unittest.TestCase):
         from vk_batch import post_footer_info, verified_like_button
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True,
-                executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+                args=['--no-sandbox'])
             try:
                 page = browser.new_page(viewport={'width':900,'height':500})
                 page.set_content('''
@@ -942,7 +942,7 @@ class RealVkLongPostRegressionTests(unittest.TestCase):
     def test_two_main_footer_controls_fail_closed(self):
         from vk_batch import post_footer_info
         with sync_playwright() as pw:
-            browser=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+            browser=pw.chromium.launch(headless=True,args=['--no-sandbox'])
             try:
                 page=browser.new_page()
                 page.set_content('''<div id="page-single-post"><div><article>
@@ -1033,7 +1033,7 @@ class RepostModalRegressionV622(unittest.TestCase):
     def test_async_share_radio_render_is_waited_for(self):
         from vk_batch import wait_share_destination, click_share_then_publish, SHARE_DIAG_JS
         with sync_playwright() as pw:
-            browser=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+            browser=pw.chromium.launch(headless=True,args=['--no-sandbox'])
             page=browser.new_page(viewport={'width':1320,'height':900})
             try:
                 page.set_content('''
@@ -1064,7 +1064,7 @@ class RepostModalRegressionV622(unittest.TestCase):
     def test_unknown_modal_labels_not_publish_and_diagnostic_no_private_text(self):
         from vk_batch import wait_share_destination
         with sync_playwright() as pw:
-            browser=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+            browser=pw.chromium.launch(headless=True,args=['--no-sandbox'])
             page=browser.new_page(viewport={'width':1320,'height':900})
             try:
                 page.set_content('''<section role="dialog" style="height:430px;width:400px">

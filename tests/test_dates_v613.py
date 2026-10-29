@@ -29,7 +29,7 @@ class PostDateBrowserTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.pw = sync_playwright().start()
-        cls.browser = cls.pw.chromium.launch(headless=True, executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+        cls.browser = cls.pw.chromium.launch(headless=True, args=['--no-sandbox'])
 
     @classmethod
     def tearDownClass(cls):

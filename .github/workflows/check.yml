@@ -13,7 +13,7 @@ jobs:
           - os: windows-latest
             python: '3.14'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 8
+    timeout-minutes: 15
     env:
       PYTHONUTF8: '1'
     steps:
@@ -24,7 +24,7 @@ jobs:
       - name: Install Python requirements
         run: python -m pip install -r requirements.txt
       - name: Compile source and tests
-        run: python -m compileall -q vk_unified.py vk_accounts.py vk_account_smoke.py vk_account_batch.py vk_api_read.py vk_batch.py vk_groups.py vk_test.py tests
+        run: python -m compileall -q .
       - name: Account/profile unit tests (no VK login)
         run: python -m unittest discover -s tests -p 'test_accounts_v624.py' -q
 
@@ -34,3 +34,37 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_account2_batch_v626.py' -q
       - name: Command action budgets and recovery tests (offline)
         run: python -m unittest discover -s tests -p 'test_command_actions_v623.py' -q
+      - name: Community CLI and destination ledger tests (offline)
+        run: python -m unittest discover -s tests -p 'test_community_cli.py' -q
+      - name: Community canonical-source duplicate guard (offline)
+        run: python -m unittest tests.test_community_reference -q
+      - name: Personal action confirmation guards (offline)
+        run: python -m unittest tests.test_action_confirmation -q
+      - name: Safe detailed diagnostics and redaction (offline)
+        run: python -m unittest tests.test_diagnostics tests.test_scheduled_action -q
+      - name: Full catalog, API key loading and public counts (offline)
+        run: python -m unittest discover -s tests -p 'test_api_key_file.py' -q
+      - name: Catalog pagination and counts (offline)
+        run: python -m unittest discover -s tests -p 'test_catalog_scan.py' -q
+      - name: Existing API provenance and caching regressions (offline)
+        run: python -m unittest tests.test_unified_v616 tests.test_unified_v618 tests.test_api_cache_v617 -q
+      - name: Daily policy, persistent quotas and batch worker (offline)
+        run: python -m unittest discover -s tests -p 'test_schedule*.py' -q
+      - name: Fresh pre-batch counts, comments and own-action overlays (offline)
+        run: python -m unittest tests.test_batch_engagement -q
+      - name: Read pacing and conservative pre-send technical recovery (offline)
+        run: python -m unittest tests.test_throughput_recovery -q
+      - name: Install Chromium for local HTML fixtures
+        run: python -m playwright install --with-deps chromium
+      - name: Community chooser and destination proof tests (offline Chromium)
+        run: python -m unittest discover -s tests -p 'test_community_ui.py' -q
+      - name: Source date hydration and fail-closed checks (offline Chromium)
+        run: python -m unittest tests.test_source_readiness -q
+      - name: Explicit VK permission evidence before no-attempt skips (offline Chromium)
+        run: python -m unittest tests.test_action_availability -q
+      - name: Diagnostic footer and network metadata (offline Chromium)
+        run: python -m unittest tests.test_diagnostics_browser -q
+      - name: Verify Node is available for frontend regressions
+        run: node --version
+      - name: Complete offline regression suite
+        run: python -m unittest discover -s tests -q

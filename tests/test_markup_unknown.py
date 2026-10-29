@@ -134,7 +134,7 @@ class UnknownMarkupTests(unittest.TestCase):
           <div data-testid="post_footer_action_like">Лайк</div></article>
           <script>window.secret='credential-secret'</script></main>'''
         with sync_playwright() as pw:
-            browser=pw.chromium.launch(headless=True, executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+            browser=pw.chromium.launch(headless=True, args=['--no-sandbox'])
             try:
                 page=browser.new_page()
                 page.set_content(markup)

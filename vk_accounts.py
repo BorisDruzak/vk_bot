@@ -11,6 +11,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +29,7 @@ LOCK_DIRS = {
     2: ROOT / '.vk-unified-running-2.lock',
 }
 BINDINGS_PATH = ROOT / 'vk_account_bindings.json'
+REGISTRY_PATH = ROOT / 'vk_account_registry.json'
 PROFILE_LINK = 'a[data-testid="header-profile-menu-button"]'
 VK_HOSTS = {'vk.com', 'www.vk.com', 'vk.ru', 'www.vk.ru', 'm.vk.com'}
 
@@ -37,9 +39,181 @@ class AccountError(RuntimeError):
 
 
 def profile_for_account(account: int) -> Path:
-    if account not in PROFILE_DIRS:
-        raise ValueError('Поддерживаются номера аккаунтов 1 и 2')
-    return PROFILE_DIRS[account]
+    if type(account) is not int or account not in account_numbers():
+        raise ValueError('Нужен зарегистрированный положительный номер аккаунта')
+    directory=load_registry()['accounts'].get(str(account),{}).get('profile_dir')
+    if directory is not None:
+        if not isinstance(directory,str) or not re.fullmatch(r'\.vk-local-profile(?:-[1-9]\d*)?',directory):
+            raise AccountError('invalid_profile_directory')
+        return ROOT/directory
+    return PROFILE_DIRS.get(account, ROOT / f'.vk-local-profile-{account}')
+
+
+def uses_primary_profile_lock(account):
+    return profile_for_account(account)==PROFILE_DIRS[1]
+
+
+def database_for_account(account: int) -> Path:
+    profile_for_account(account)
+    return ROOT / ('vk_batch.sqlite3' if account == 1 else f'vk_batch_account_{account}.sqlite3')
+
+
+def load_registry() -> dict:
+    if not REGISTRY_PATH.exists():
+        return {'version': 1, 'accounts': {}}
+    raw = json.loads(REGISTRY_PATH.read_text(encoding='utf-8'))
+    if (not isinstance(raw, dict) or raw.get('version') != 1
+            or not isinstance(raw.get('accounts'), dict)):
+        raise AccountError('Неверный реестр управления аккаунтами')
+    for number, row in raw['accounts'].items():
+        if (not isinstance(number,str) or not number.isascii() or not number.isdigit()
+                or str(int(number)) != number or not 1 <= int(number) <= 1000
+                or not isinstance(row, dict) or type(row.get('enabled')) is not bool):
+            raise AccountError('Неверная запись аккаунта')
+    return raw
+
+
+def account_numbers() -> list[int]:
+    return sorted({1, 2, *(int(k) for k in load_registry()['accounts'])})
+
+
+def atomic_json(path: Path, value) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=path.name+'.', suffix='.tmp', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as out:
+            json.dump(value, out, ensure_ascii=False, indent=2)
+            out.write('\n'); out.flush(); os.fsync(out.fileno())
+        for attempt in range(6):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError as exc:
+                # Windows readers can briefly deny replacement of JSON files.
+                # Retry only this local replacement, never a VK operation.
+                if getattr(exc,'winerror',None) not in (5,32,33) or attempt==5:raise
+                time.sleep(.05*(attempt+1))
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+@contextmanager
+def management_lock(path=None):
+    path = Path(path) if path is not None else REGISTRY_PATH.with_suffix('.lock')
+    try: fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        raise AccountError('Изменение аккаунтов уже выполняется') from None
+    try:
+        os.close(fd)
+        yield
+    finally: path.unlink(missing_ok=True)
+
+
+def account_record(account: int) -> dict:
+    profile_for_account(account)
+    import vk_schedule_policy as schedule
+    defaults = schedule.DEFAULT_CONFIG['accounts'].get(str(account),
+        {'likes':0, 'personal_reposts':0, 'community_reposts':0, 'communities':[]})
+    return {'account':account, 'name':f'Аккаунт {account}', 'enabled':account in (1,2),
+            'policy':dict(defaults), **load_registry()['accounts'].get(str(account), {})}
+
+
+def account_enabled(account: int) -> bool:
+    row=account_record(account)
+    return row['enabled'] and not row.get('archived',False) and not row.get('connection_pending',False)
+
+
+def prepare_account_database(account: int) -> None:
+    """Prepare the actor ledger before publishing a newly allocated number."""
+    if type(account) is not int or not 1<=account<=1000:raise ValueError('Invalid account number')
+    from contextlib import closing
+    import vk_batch as engine
+    path=ROOT/('vk_batch.sqlite3' if account==1 else f'vk_batch_account_{account}.sqlite3')
+    with closing(engine.db_open(path)):pass
+
+
+def add_account(name: str = '') -> dict:
+    if not isinstance(name, str) or len(name.strip()) > 80 or any(ord(c)<32 for c in name):
+        raise ValueError('Имя аккаунта должно быть не длиннее 80 символов')
+    with management_lock():
+        registry = load_registry()
+        number = max(account_numbers()) + 1
+        if number > 1000: raise AccountError('Достигнут предел локальных профилей')
+        flexible=registry.get('account_flow')=='add_any'
+        row = {'account':number, 'name':name.strip() or ('Новый аккаунт' if flexible else f'Аккаунт {number}'), 'enabled':False,
+               'policy':{'likes':0,'personal_reposts':0,'community_reposts':0,'communities':[]}}
+        registry['accounts'][str(number)] = row
+        prepare_account_database(number)
+        atomic_json(REGISTRY_PATH, registry)
+    return row
+
+
+def configure_account(account: int, **updates) -> dict:
+    import vk_schedule_policy as schedule
+    allowed = {'enabled','likes','personal_reposts','community_reposts','communities','name'}
+    if set(updates)-allowed: raise ValueError('Неизвестная настройка аккаунта')
+    with management_lock():
+        row = account_record(account)
+        enabled = updates.get('enabled', row['enabled'])
+        if type(enabled) is not bool: raise ValueError('enabled должен быть boolean')
+        if enabled:
+            if row.get('archived') or row.get('connection_pending'):raise AccountError('account_not_connected')
+            login_file=ROOT/f'.vk-login-{account}.json'
+            if login_file.exists() and json.loads(login_file.read_text(encoding='utf-8')).get('state') in ('opening','waiting_browser','awaiting_login','ready'):
+                raise AccountError('Сначала завершите открытый сеанс входа')
+            binding = load_bindings(BINDINGS_PATH)['accounts'].get(str(account), {})
+            if type(binding.get('vk_id')) is not int: raise AccountError('Сначала подтвердите VK ID')
+            import vk_authentication
+            vk_authentication.require_matched(account)
+        limits = {**row['policy'], **{k:v for k,v in updates.items() if k in row['policy']}}
+        # Validate both this record and total schedule capacity before writing.
+        if type(limits.get('community_reposts')) is int and limits['community_reposts']>0 and limits.get('communities')==[]:
+            raise AccountError('community_destinations_required')
+        schedule.validate_account_policy(limits)
+        registry = load_registry()
+        row = {**row, 'enabled':enabled, 'policy':limits}
+        if 'name' in updates:
+            name=updates['name']
+            if not isinstance(name,str) or not name.strip() or len(name)>80 or any(ord(c)<32 for c in name):
+                raise ValueError('Неверное имя аккаунта')
+            row['name']=name.strip()
+        registry['accounts'][str(account)] = row
+        overrides = policy_overrides(registry)
+        for value in overrides.values():schedule.validate_account_policy(value)
+        try:
+            cfg = future_policy(registry)
+            schedule.build_schedule(datetime.now(timezone.utc), cfg)
+        except ValueError as exc:
+            raise AccountError('account_schedule_capacity') from exc
+        atomic_json(REGISTRY_PATH, registry)
+        return row
+
+
+def policy_overrides(registry):
+    return {k:({'likes':0,'personal_reposts':0,'community_reposts':0,'communities':[]}
+               if r.get('archived') or r.get('connection_pending') else r['policy'])
+            for k,r in registry['accounts'].items()}
+
+
+def future_policy(registry):
+    """Validate pending quotas against the scheduler's configured work window.
+
+    Existing saved days are immutable and are selected by State.refresh_policy.
+    This policy is only for capacity checks and the next unplanned day.
+    """
+    import vk_schedule_policy as schedule
+    path=ROOT/'vk_automation.json'
+    base=json.loads(path.read_text(encoding='utf-8')).get('policy',{}) if path.exists() else {}
+    base=schedule.validate_config(base)
+    return schedule.validate_config({**base,'accounts':{**base['accounts'],**policy_overrides(registry)}})
+
+
+def effective_policy(base: dict) -> dict:
+    import vk_schedule_policy as schedule
+    overrides = policy_overrides(load_registry())
+    cfg = {**base, 'accounts':{**base['accounts'], **overrides}}
+    return schedule.validate_config(cfg)
 
 
 def vk_id_from_profile_href(href: str | None) -> int | None:
@@ -68,12 +242,17 @@ def load_bindings(path: Path = BINDINGS_PATH) -> dict:
 
 
 def register_detected_id(path: Path, account: int, observed_id: int) -> tuple[str, dict]:
+    with management_lock(Path(path).with_suffix('.binding.lock')):
+        return _register_detected_id(path, account, observed_id)
+
+
+def _register_detected_id(path: Path, account: int, observed_id: int) -> tuple[str, dict]:
     """Bind the numeric ID once; never silently replace an existing identity.
 
     Result: ('bound'|'matched', registry). Does not touch browser profiles.
     """
     profile_for_account(account)
-    if not isinstance(observed_id, int) or observed_id <= 0:
+    if type(observed_id) is not int or observed_id <= 0:
         raise AccountError('VK ID не подтверждён: профиль не привязан')
     registry = load_bindings(path)
     accounts = registry['accounts']
@@ -106,9 +285,26 @@ def register_detected_id(path: Path, account: int, observed_id: int) -> tuple[st
 
 
 @contextmanager
+def exclusive_activity(root=None):
+    """Coordinate a whole worker batch with login/statistics readers.
+
+    An OS lease releases on crash. Its persistent file is never removed as a
+    way to free a browser or a worker; nested global/profile locks still apply.
+    """
+    from vk_scheduler import singleton
+    with singleton(Path(root) / '.vk-activity.guard' if root is not None else ROOT / '.vk-activity.guard'):
+        yield
+
+
+@contextmanager
 def exclusive_profile(account: int):
-    profile_for_account(account)
-    lock = LOCK_DIRS[account]
+    profile=profile_for_account(account)
+    row=load_registry()['accounts'].get(str(account),{})
+    physical=account
+    if row.get('profile_dir'):
+        suffix=profile.name.removeprefix('.vk-local-profile')
+        physical=int(suffix[1:]) if suffix else 1
+    lock = LOCK_DIRS.get(physical, ROOT / f'.vk-unified-running-{physical}.lock')
     try:
         fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError:
@@ -160,9 +356,33 @@ def inspect_context(context, attempts: int = 6) -> int | None:
 
 
 def browser_inspect(account: int, interactive: bool, *, binding_path: Path = BINDINGS_PATH) -> int:
+    if interactive and Path(binding_path).resolve()==Path(BINDINGS_PATH).resolve():
+        import vk_connections
+        if vk_connections.enabled():
+            import vk_control
+            vk_control.start_login(account)
+            print('[LOGIN] Окно VM: войдите в выбранный VK. Профиль сохранится автоматически.')
+            return 0
     profile = profile_for_account(account)
+    authentication = None
+    if Path(binding_path).resolve() == Path(BINDINGS_PATH).resolve():
+        import vk_authentication as authentication
+        authentication.invalidate(account)
+
+    def inspect_and_observe(context):
+        try:
+            observed = inspect_context(context)
+        except AccountError:
+            if authentication is not None:
+                authentication.observe(account, None)
+            raise
+        if authentication is not None:
+            authentication.observe(account, observed)
+        return observed
+
     # No copying of profile, cookies, localStorage or access tokens at any time.
-    with exclusive_profile(account), sync_playwright() as p:
+    from vk_activity import shared_activity
+    with shared_activity(ROOT), exclusive_profile(account), sync_playwright() as p:
         print(f'[PROFILE] Аккаунт №{account}; Chromium: {profile}')
         print('[PROFILE] Действия с публикациями отключены. Данные входа остаются в профиле Chromium.')
         profile.mkdir(parents=True, exist_ok=True)
@@ -192,7 +412,7 @@ def browser_inspect(account: int, interactive: bool, *, binding_path: Path = BIN
                     if cmd not in {'', 'ГОТОВО', 'СТАТУС', 'CHECK'}:
                         print('[LOGIN] Неизвестная команда.')
                         continue
-                    identity = inspect_context(context)
+                    identity = inspect_and_observe(context)
                     if identity is None:
                         print('[CHECK] Числовой VK ID из шапки страницы пока не найден. '
                               'Убедись, что открыт твой VK и вход завершён.')
@@ -202,13 +422,15 @@ def browser_inspect(account: int, interactive: bool, *, binding_path: Path = BIN
                         continue
                     break
             else:
-                identity = inspect_context(context)
+                identity = inspect_and_observe(context)
                 if identity is None:
                     print('[CHECK] Не удалось подтвердить авторизацию по ссылке профиля в шапке VK. '
                           'Ни один аккаунт не привязан и не изменён.')
                     return 2
             try:
                 status, _ = register_detected_id(binding_path, account, identity)
+                if status == 'bound' and authentication is not None:
+                    authentication.observe(account, identity)
             except AccountError as exc:
                 print('[MISMATCH]', exc)
                 return 3
@@ -224,16 +446,15 @@ def browser_inspect(account: int, interactive: bool, *, binding_path: Path = BIN
 def accounts_report(binding_path: Path = BINDINGS_PATH) -> int:
     bindings = load_bindings(binding_path)['accounts']
     print('[ACCOUNTS] Локальные профили, без обращения к VK:')
-    for account in (1, 2):
+    for account in account_numbers():
         path = profile_for_account(account)
         row = bindings.get(str(account))
         if isinstance(row, dict) and isinstance(row.get('vk_id'), int):
             state = f'VK ID {row["vk_id"]}; проверен {row.get("verified_at_utc", "неизвестно")}'
         else:
             state = 'личность не привязана'
-        print(f'   №{account}: {path.name}; каталог={"есть" if path.is_dir() else "нет"}; {state}')
-    print('[ACCOUNTS] Аккаунт №2: отдельная SQLite и ручные --test-post/--run-actions; '
-          'синхронные задания двух аккаунтов не поддерживаются.')
+        record=account_record(account)
+        print(f'   №{account}: {record["name"]}; {path.name}; каталог={"есть" if path.is_dir() else "нет"}; {state}; очередь={record["enabled"]}; лимиты={record["policy"]}')
     return 0
 
 

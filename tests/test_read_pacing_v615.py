@@ -70,7 +70,7 @@ class ReadPacingTests(unittest.TestCase):
         self.assertEqual(cfg['read_pause_seconds'], 15.0)
         self.assertEqual(cfg['audit_posts_per_run'], 3)
         self.assertEqual(cfg['scan_min_interval_hours'], 12.0)
-        self.assertEqual(len(cfg['groups']), 57)
+        self.assertEqual(len(cfg['groups']),64)
 
     def test_scan_ttl_prevents_reopening_just_scanned_group(self):
         db = self._db()

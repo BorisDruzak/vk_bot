@@ -1,3 +1,4 @@
+from contextlib import closing
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,7 +12,7 @@ class SafetyGateTests(unittest.TestCase):
     def test_limits_are_persistent_and_attempt_is_booked_before_click(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'safe.db'
-            with db_open(path) as db:
+            with closing(db_open(path)) as db:
                 budget=SafetyBudget(db, GROUP, per_run=2, per_24h=3)
                 budget.reserve(13376, 'like')
                 budget.reserve(13376, 'repost')
@@ -19,7 +20,7 @@ class SafetyGateTests(unittest.TestCase):
                 with self.assertRaisesRegex(StopRun,'за запуск'):
                     budget.reserve(13365,'like')
                 self.assertEqual(actions_24h(db,GROUP),2)
-            with db_open(path) as db:
+            with closing(db_open(path)) as db:
                 budget=SafetyBudget(db,GROUP,per_run=2,per_24h=3)
                 budget.reserve(13365,'like')
                 self.assertEqual(actions_24h(db,GROUP),3)
@@ -30,9 +31,9 @@ class SafetyGateTests(unittest.TestCase):
     def test_warning_latches_across_restarts_until_manual_ack(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'safe.db'
-            with db_open(path) as db:
+            with closing(db_open(path)) as db:
                 lock_on_platform_warning(db,GROUP,'VK сообщил об ограничении')
-            with db_open(path) as db:
+            with closing(db_open(path)) as db:
                 self.assertIsNotNone(safety_lock_state(db,GROUP))
                 with self.assertRaisesRegex(StopRun,'блокировка'):
                     SafetyBudget(db,GROUP,2,4)
@@ -44,7 +45,7 @@ class SafetyGateTests(unittest.TestCase):
 
     def test_budget_never_logs_a_failed_limit_reservation(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with db_open(Path(tmp)/'db.sqlite') as db:
+            with closing(db_open(Path(tmp)/'db.sqlite')) as db:
                 b=SafetyBudget(db,GROUP,1,1)
                 with self.assertRaises(ValueError):
                     b.reserve(13376,'comment')
@@ -62,7 +63,7 @@ class SafetyActionStateTests(unittest.TestCase):
         from unittest.mock import MagicMock
         from vk_batch import add_posts, target_row, process_one, SafetyLimitReached
         with tempfile.TemporaryDirectory() as tmp:
-            with db_open(Path(tmp)/'db.sqlite') as db:
+            with closing(db_open(Path(tmp)/'db.sqlite')) as db:
                 add_posts(db,GROUP,[13376])
                 budget=SafetyBudget(db,GROUP,per_run=1,per_24h=1)
                 budget.reserve(13354,'like')
@@ -85,7 +86,7 @@ class SafetyActionStateTests(unittest.TestCase):
 class CrossGroupSafetyTests(unittest.TestCase):
     def test_account_budget_and_warning_are_global_across_groups(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with db_open(Path(tmp)/'db.sqlite') as db:
+            with closing(db_open(Path(tmp)/'db.sqlite')) as db:
                 SafetyBudget(db,GROUP,per_run=2,per_24h=1).reserve(13376,'like')
                 with self.assertRaisesRegex(StopRun,'за 24 часа'):
                     SafetyBudget(db,123456789,per_run=2,per_24h=1).reserve(999,'like')

@@ -106,7 +106,7 @@ class TestBrowserFixtures(unittest.TestCase):
         cls.playwright = sync_playwright().start()
         try:
             cls.browser = cls.playwright.chromium.launch(headless=True,
-                          executable_path='/usr/bin/chromium', args=['--no-sandbox'])
+                          args=['--no-sandbox'])
         except Exception:
             cls.playwright.stop()
             raise

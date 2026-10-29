@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 from weakref import WeakKeyDictionary
+import vk_diagnostics as diagnostics
 
 from playwright.sync_api import Error as PlaywrightError, TimeoutError as PWTimeout, sync_playwright
 
@@ -659,6 +660,45 @@ class StopRun(RuntimeError):
     """Halt safely on ambiguous actions, VK restrictions or unexpected markup."""
 
 
+class ActionConfirmationError(StopRun):
+    """Fixed code plus boolean-only evidence; never an authorization to retry."""
+    def __init__(self,action,state):
+        if action not in ('like','repost'):raise ValueError('Unknown confirmation action')
+        self.reason_code=action+'_confirmation_timeout'
+        self.observation={key:(state.get(key) if type(state.get(key)) is bool else None)
+                          for key in ('liked','reposted','main_post_liked')}
+        super().__init__(self.reason_code)
+
+
+class ActionTransportError(StopRun):
+    """A typed browser transport failure; recovery still requires durable intent.
+
+    The original Playwright exception is retained as the direct cause by the
+    caller. This class itself authorizes no retry and contains no raw UI data.
+    """
+    def __init__(self,action):
+        if action not in ('like','repost'):raise ValueError('Unknown transport action')
+        self.action=action
+        self.reason_code=action+'_transport_error'
+        super().__init__(self.reason_code)
+
+
+class ActionGuardError(StopRun):
+    def __init__(self,code,state=None,*,action=None):
+        if code not in diagnostics.GUARDS:raise ValueError('Unknown action guard code')
+        self.reason_code='guard_'+code
+        self.observation=diagnostics.sanitize_observation(state)
+        message={
+            'footer_like_already_set':'Кнопка основного поста показывает, что лайк уже стоит; повтор запрещён',
+            'pre_action_like_state_conflict':'Основной лайк поста не совпадает с VK prefetch; ничего не нажато',
+            'pre_action_source_missing':'Основной пост исчез после проверки даты; нажатия запрещены',
+            'pre_action_state_unknown':'Состояние выбранного действия неизвестно; никаких кликов',
+            'pre_action_permission_unproven':'Недоступность действия не подтверждена строгой проверкой VK; пропуск запрещён',
+            'footer_scroll_failed':'Кнопка основного поста недоступна после прокрутки',
+        }.get(code,'Нет безопасной кнопки '+('share' if action=='share' else 'like')+' основного поста')
+        super().__init__(self.reason_code+': '+message)
+
+
 class SafetyLimitReached(StopRun):
     """A protective cap was reached before another click. Not a VK error."""
 
@@ -966,18 +1006,18 @@ POST_FOOTER_ACTION_JS = r"""
   const out = {ok:false, reason:'', postRoot:!!root, primaryArticle:false,
     likeElements:0, visibleLikes:0, liked:null, ariaHidden:null,
     targetCount:0, action};
-  if (!root) {out.reason='Точный контейнер поста не найден'; return out;}
+  if (!root) {out.reasonCode='footer_root_missing';out.reason='Точный контейнер поста не найден'; return out;}
 
   const single = document.querySelector('#page-single-post');
   const primary = single?.querySelector(':scope > div > article') ||
                   single?.querySelector(':scope > article') || null;
   // Never accept a continuation-feed post as the main post.
   if (single && primary && !primary.contains(root)) {
-    out.reason='Контейнер не принадлежит основному article'; return out;
+    out.reasonCode='footer_wrong_primary';out.reason='Контейнер не принадлежит основному article'; return out;
   }
   if (root.getAttribute('data-post-nesting-lvl') &&
       root.getAttribute('data-post-nesting-lvl') !== '0') {
-    out.reason='Выбрана вложенная запись, а не основной пост'; return out;
+    out.reasonCode='footer_nested_source';out.reason='Выбрана вложенная запись, а не основной пост'; return out;
   }
   const scope = root;
   out.primaryArticle = !!(primary || root.closest('article'));
@@ -1010,6 +1050,7 @@ POST_FOOTER_ACTION_JS = r"""
   out.likeElements = allLikes.length;
   out.visibleLikes = likes.length;
   if (likes.length !== 1) {
+    out.reasonCode='footer_like_not_unique';
     out.reason='У основного поста нет единственной видимой кнопки footer-like';
     return out;
   }
@@ -1018,13 +1059,16 @@ POST_FOOTER_ACTION_JS = r"""
   out.liked = rawLiked === 'true' ? true : rawLiked === 'false' ? false : null;
   out.ariaHidden = like.getAttribute('aria-hidden');
   if (out.liked === null) {
+    out.reasonCode='footer_like_state_unknown';
     out.reason='Нет достоверного data-user-likes у кнопки поста'; return out;
   }
   const label = (like.getAttribute('aria-label') || '').toLowerCase();
   if (out.liked === false && /убрать|снять|удалить|remove|unlike/.test(label)) {
+    out.reasonCode='footer_like_label_conflict';
     out.reason='Несогласованность data-user-likes и названия кнопки'; return out;
   }
   if (out.liked === true && /отправить реакцию|поставить лайк/.test(label)) {
+    out.reasonCode='footer_like_label_conflict';
     out.reason='Несогласованность data-user-likes и названия кнопки'; return out;
   }
   if (mark) document.querySelectorAll('[data-vk-batch-footer-action]')
@@ -1035,7 +1079,7 @@ POST_FOOTER_ACTION_JS = r"""
     if (mark) like.setAttribute('data-vk-batch-footer-action','like');
     return out;
   }
-  if (action !== 'share') {out.reason='Неизвестное действие'; return out;}
+  if (action !== 'share') {out.reasonCode='footer_action_invalid';out.reason='Неизвестное действие'; return out;}
   const lr = like.getBoundingClientRect();
   const sameToolbar = e => {
     const r=e.getBoundingClientRect();
@@ -1054,6 +1098,7 @@ POST_FOOTER_ACTION_JS = r"""
     other !== e && e.contains(other)));
   out.targetCount = leaves.length;
   if (leaves.length !== 1) {
+    out.reasonCode='footer_share_not_unique';
     out.reason='Нет единственной кнопки репоста в строке действий основного поста';
     return out;
   }
@@ -1079,22 +1124,20 @@ def wait_post_footer_info(page, group_id: int, post_id: int, action: str, mark: 
             return last
         if attempt < 11:
             page.wait_for_timeout(350)
-    raise StopRun(f'Нет безопасной кнопки {action} основного поста: {last["reason"]} '
-                  f'(likeElements={last["likeElements"]}, visibleLikes={last["visibleLikes"]}, '
-                  f'targetCount={last["targetCount"]})')
+    raise ActionGuardError(last.get('reasonCode') if last.get('reasonCode') in diagnostics.GUARDS else 'footer_unknown',last,action=action)
 
 
 def post_footer_button(page, group_id: int, post_id: int, action: str):
     info = wait_post_footer_info(page, group_id, post_id, action, mark=True)
     if action == 'like' and info['liked']:
-        raise StopRun('Кнопка основного поста показывает, что лайк уже стоит; повтор запрещён')
+        raise ActionGuardError('footer_like_already_set',info)
     locator = page.locator(f'[data-vk-batch-footer-action="{action}"]')
     # Off-screen is expected on long posts. This must happen before reserving
     # the SQLite action, and Playwright will verify click actionability.
     try:
         locator.scroll_into_view_if_needed(timeout=12000)
     except (PWTimeout, PlaywrightError) as exc:
-        raise StopRun(f'Кнопка {action} основного поста недоступна после прокрутки') from exc
+        raise ActionGuardError('footer_scroll_failed',info) from exc
     return locator
 
 
@@ -1102,11 +1145,24 @@ def verified_like_button(page, group_id: int, post_id: int):
     return post_footer_button(page, group_id, post_id, 'like')
 
 
-def click_like(page, group_id: int, post_id: int, *, prepared_button=None):
+def _final_click_timeout(before_click, *, default_ms=12000):
+    """Evaluate a scheduler deadline only after potentially slow preparation."""
+    if before_click is None:
+        return default_ms
+    if not callable(before_click):
+        raise StopRun('Нет действующей проверки срока финального клика')
+    timeout=before_click()
+    if type(timeout) is not int or not 1<=timeout<=9000:
+        raise StopRun('Недопустимый остаток времени для финального клика')
+    return timeout
+
+
+def click_like(page, group_id: int, post_id: int, *, prepared_button=None, before_click=None):
     # Re-resolve immediately before clicking: a SPA update could have replaced
     # the previously selected node or toggled its state.
     locator = post_footer_button(page, group_id, post_id, 'like')
-    locator.click(timeout=12000)
+    timeout=_final_click_timeout(before_click)
+    locator.click(timeout=timeout)
     page.wait_for_timeout(500)
     ensure_ok(page)
 
@@ -1198,7 +1254,7 @@ def inspect_share_only(page, group_id: int, post_id: int) -> None:
         pass
 
 
-def click_share_then_publish(page, group_id: int, post_id: int, *, before_publish=None):
+def click_share_then_publish(page, group_id: int, post_id: int, *, before_publish=None, before_click=None):
     # Share must come from the SAME main-post toolbar as the verified like.
     # A generic 'Поделиться' somewhere in comments or recommended posts is not valid.
     post_footer_button(page, group_id, post_id, 'share').click(timeout=12000)
@@ -1235,19 +1291,35 @@ def click_share_then_publish(page, group_id: int, post_id: int, *, before_publis
     # Persist uncertain and reserve the attempt only here, never for the popup.
     if before_publish is not None:
         before_publish()
-    page.locator('[data-vk-poc-publish="0"]').click(timeout=12000)
+    if before_click is not None:
+        state=page.evaluate(SHARE_DIALOG_JS,{'action':'state'})
+        if not state.get('ok') or state['state']['wall'] is not True or state['state']['direct_message'] is not False:
+            raise StopRun('Назначение изменилось после сохранения попытки')
+    final=page.locator('[data-vk-poc-publish="0"]')
+    timeout=_final_click_timeout(before_click)
+    final.click(timeout=timeout)
     page.wait_for_timeout(700)
     ensure_ok(page)
 
 
-def after_action_state(page, group_id: int, post_id: int):
+def after_action_state(page, group_id: int, post_id: int, *, action=None, guard=None):
     # A new document is required. VK's in-memory prefetch cache may retain
     # the old values even when the UI has already changed.
+    if action not in (None,'like','repost'):raise ValueError('Unknown confirmation action')
     go_to_post(page, group_id, post_id)
-    state = refresh_state(page, group_id, post_id)
-    footer = post_footer_info(page, group_id, post_id, 'like')
-    state['main_post_liked'] = footer['liked'] if footer['ok'] else None
-    return state
+    deadline=time.monotonic()+9
+    while True:
+        ensure_ok(page)
+        if guard is not None:guard()
+        state=refresh_state(page,group_id,post_id,attempts=1)
+        footer=post_footer_info(page,group_id,post_id,'like')
+        state['main_post_liked']=footer['liked'] if footer['ok'] else None
+        confirmed=(state['liked'] is True and state['main_post_liked'] is True
+                   if action=='like' else state['reposted'] is True)
+        if action is None or confirmed:
+            return state
+        if time.monotonic()>=deadline:raise ActionConfirmationError(action,state)
+        page.wait_for_timeout(250)
 
 
 def process_one(page, db, group_id: int, row: sqlite3.Row, pause: float, safety: SafetyBudget | None = None, actions: set[str] | None = None, *, already_open: bool = False) -> bool:
@@ -1263,7 +1335,7 @@ def process_one(page, db, group_id: int, row: sqlite3.Row, pause: float, safety:
         ensure_ok(page)
         matches = page.evaluate(POST_ROOT_READY_JS, {"groupId": group_id, "postId": pid})
         if not matches:
-            raise StopRun("Основной пост исчез после проверки даты; нажатия запрещены")
+            raise ActionGuardError('pre_action_source_missing')
     data = refresh_state(page, group_id, pid)
     print(f"   Предсостояние: like={data['liked']}, repost={data['reposted']} ({data['source']})")
 
@@ -1280,16 +1352,17 @@ def process_one(page, db, group_id: int, row: sqlite3.Row, pause: float, safety:
         if action == 'like' and current is not None:
             live_main = wait_post_footer_info(page, group_id, pid, 'like')
             if live_main['liked'] != current:
-                raise StopRun('Основной лайк поста не совпадает с VK prefetch; '
-                              'ничего не нажато и статус не изменён')
+                raise ActionGuardError('pre_action_like_state_conflict',{'liked':current,'main_post_liked':live_main['liked']})
         if current is True:
             status_write(db, group_id, pid, action, "already", "Уже отмечено в VK")
             print(f"   [{action.upper()}] уже выполнено — пропуск")
             continue
         if current is None:
             status_write(db, group_id, pid, action, "uncertain", "Не удалось проверить состояние до клика")
-            raise StopRun(f"{action}: состояние неизвестно; никаких кликов по нему не делаем")
+            raise ActionGuardError('pre_action_state_unknown',data)
         if data[field] is False:
+            if safety is not None and vars(safety).get('require_vk_denial_evidence') is True:
+                raise ActionGuardError('pre_action_permission_unproven',data)
             status_write(db, group_id, pid, action, "unavailable", "VK запрещает действие")
             print(f"   [{action.upper()}] действие недоступно по данным VK")
             continue
@@ -1309,18 +1382,25 @@ def process_one(page, db, group_id: int, row: sqlite3.Row, pause: float, safety:
                          'Финальная публикация подготовлена; требуется подтверждение VK')
             repost_submit_started = True
         try:
+            # Opt in only through an explicitly stored callback. Dynamic
+            # __getattr__ implementations (including legacy MagicMock budgets)
+            # must not manufacture a new execution hook.
+            final_guard=vars(safety).get('final_click_timeout') if safety is not None else None
+            click_options={'before_click':final_guard} if callable(final_guard) else {}
             if action == 'like':
                 if safety is not None:
                     safety.reserve(pid, 'like')
                 status_write(db, group_id, pid, 'like', 'uncertain',
                              'Подготовка клика; требуется перепроверка')
-                click_like(page, group_id, pid, prepared_button=prepared_like)
+                click_like(page, group_id, pid, prepared_button=prepared_like,**click_options)
             else:
                 click_share_then_publish(page, group_id, pid,
-                                         before_publish=before_repost_publish)
+                                         before_publish=before_repost_publish,**click_options)
             status_write(db, group_id, pid, action, "uncertain", "Клик выполнен, подтверждение VK ещё не получено")
             time.sleep(pause)  # stable UI/pacing, not a way to evade anti-spam
-            data = after_action_state(page, group_id, pid)
+            confirmation_guard=vars(safety).get('confirmation_guard') if safety is not None else None
+            data = after_action_state(page,group_id,pid,action=action,
+                guard=confirmation_guard if callable(confirmation_guard) else None)
             if data[desired_flag] is True and (action != 'like' or data.get('main_post_liked') is True):
                 status_write(db, group_id, pid, action, "verified", "VK подтвердил состояние основного поста после загрузки")
                 print(f"   [{action.upper()}] подтверждено VK")
@@ -1334,6 +1414,10 @@ def process_one(page, db, group_id: int, row: sqlite3.Row, pause: float, safety:
         except StopRun:
             raise
         except (PWTimeout, PlaywrightError) as exc:
+            # An observed protection remains fatal even if the browser operation
+            # failed before it could surface the response/protection event.
+            try:ensure_ok(page)
+            except PlaywrightError:pass  # A closed transport cannot be inspected.
             if action == 'repost' and not repost_submit_started:
                 # A broken chooser cannot have passed our final submit gate.
                 # Keep pending, but stop this run for a human UI check.
@@ -1341,8 +1425,8 @@ def process_one(page, db, group_id: int, row: sqlite3.Row, pause: float, safety:
                 pass
             else:
                 status_write(db, group_id, pid, action, 'uncertain',
-                             f'Ошибка около реального действия: {str(exc)[:140]}')
-            raise StopRun(f"{action}: ошибка интерфейса VK; дальнейшие действия остановлены") from exc
+                             'Ошибка транспорта около реального действия; результат uncertain')
+            raise ActionTransportError(action) from exc
     return True
 
 

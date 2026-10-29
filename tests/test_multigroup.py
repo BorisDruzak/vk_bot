@@ -13,8 +13,8 @@ import vk_groups as multi
 class MultiGroupConfigTests(unittest.TestCase):
     def test_imported_groups_are_all_unique_and_include_administration(self):
         cfg=multi.load_config()
-        self.assertEqual(len(cfg['groups']),57)
-        self.assertEqual(len({x['id'] for x in cfg['groups']}),57)
+        self.assertEqual(len(cfg['groups']),64)
+        self.assertEqual(len({x['id'] for x in cfg['groups']}),64)
         self.assertIn(188206921,{x['id'] for x in cfg['groups']})
         self.assertEqual(cfg['lookback_days'],7)
 
@@ -155,7 +155,7 @@ class BrowserMarkupTests(unittest.TestCase):
          <div data-testid="post" data-post-id="-188_4" data-post-nesting-lvl="0">
            <a data-testid="post_date_block_preview">2 ч назад</a></div>'''
         with sync_playwright() as pw:
-            browser=pw.chromium.launch(headless=True, executable_path='/usr/bin/chromium', args=['--no-sandbox'])
+            browser=pw.chromium.launch(headless=True, args=['--no-sandbox'])
             try:
                 page=browser.new_page()
                 page.set_content(html)
@@ -173,7 +173,7 @@ class BrowserMarkupTests(unittest.TestCase):
           {"owner_id":-188,"id":11,"date":1790099999}]}}]};
         </script>'''
         with sync_playwright() as pw:
-            browser=pw.chromium.launch(headless=True, executable_path='/usr/bin/chromium', args=['--no-sandbox'])
+            browser=pw.chromium.launch(headless=True, args=['--no-sandbox'])
             try:
                 page=browser.new_page()
                 page.set_content(html)

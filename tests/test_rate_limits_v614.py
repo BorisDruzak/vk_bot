@@ -21,7 +21,7 @@ class UiRateLimitTests(unittest.TestCase):
     def setUpClass(cls):
         cls.playwright = sync_playwright().start()
         cls.browser = cls.playwright.chromium.launch(
-            headless=True, executable_path='/usr/bin/chromium', args=['--no-sandbox'])
+            headless=True, args=['--no-sandbox'])
 
     @classmethod
     def tearDownClass(cls):
@@ -167,7 +167,7 @@ class ScanRotationTests(unittest.TestCase):
     def test_config_has_conservative_scan_ceiling(self):
         cfg=multi.load_config()
         self.assertEqual(cfg['scan_groups_per_run'],3)
-        self.assertEqual(len(cfg['groups']),57)
+        self.assertEqual(len(cfg['groups']),64)
 
     def test_old_config_upgrade_keeps_full_group_list(self):
         import json
@@ -178,7 +178,7 @@ class ScanRotationTests(unittest.TestCase):
             path.write_text(json.dumps(cfg,ensure_ascii=False),encoding='utf-8')
             loaded=multi.load_config(path)
             self.assertEqual(loaded['scan_groups_per_run'],3)
-            self.assertEqual(len(loaded['groups']),57)
+            self.assertEqual(len(loaded['groups']),64)
             self.assertNotIn('scan_groups_per_run',json.loads(path.read_text(encoding='utf-8')))
 
 

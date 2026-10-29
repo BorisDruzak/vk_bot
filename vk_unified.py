@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import sys
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
@@ -28,7 +29,7 @@ import vk_api_read as api
 import vk_batch as engine
 import vk_groups as multi
 
-VERSION = '6.26'
+VERSION = '6.34'
 LOCKFILE = Path(__file__).resolve().parent / '.vk-unified-running.lock'
 DEFAULT_CAMPAIGN = 'test_60_likes'
 DEFAULT_PAIR_CAMPAIGN = 'auto_30_pairs'
@@ -1146,19 +1147,22 @@ def run_account2_mode(args, parser) -> int:
     cfg['read_pause_seconds'] = max(cfg['read_pause_seconds'], 20.)
     if likes and not cfg['actions']['like'] or reposts and not cfg['actions']['repost']:
         parser.error('Запрошенное действие глобально выключено в vk_groups.json')
-    vk_id = smoke.pinned_user_id(2)
-    if not accounts.profile_for_account(2).is_dir():
+    account=getattr(args,'account',2)
+    import vk_community
+    vk_id = smoke.pinned_user_id(2) if account==2 else vk_community.pinned_identity(account)
+    account_db=smoke.ACCOUNT2_DB if account==2 else accounts.database_for_account(account)
+    if not accounts.profile_for_account(account).is_dir():
         raise smoke.SmokeError('Профиль Chromium №2 отсутствует; сначала --account 2 --check-account')
-    report = args.report_file or (Path(__file__).resolve().parent / 'vk_actions_results_account_2.csv')
-    print(f'VK UNIFIED v{VERSION} | аккаунт=2, VK ID {vk_id}; источник: общий VK API (только чтение)')
+    report = args.report_file or (Path(__file__).resolve().parent / f'vk_actions_results_account_{account}.csv')
+    print(f'VK UNIFIED v{VERSION} | аккаунт={account}, VK ID {vk_id}; источник: общий VK API (только чтение)')
     # Serialize both accounts' action runs to prevent overlapping VK sessions.
-    with exclusive_run(), accounts.exclusive_profile(2), closing(engine.db_open(smoke.ACCOUNT2_DB)) as db:
+    with exclusive_run(), accounts.exclusive_profile(account), closing(engine.db_open(account_db)) as db:
         smoke.init_account2(db, vk_id)
         if mode == 'run':
             engine.require_platform_unlocked(db)
         if mode != 'status':
             total = account_catalog.refresh_public_catalog(db, source_db=engine.DB_PATH,
-                                     target_db=smoke.ACCOUNT2_DB, days=cfg['lookback_days'])
+                                     target_db=account_db, days=cfg['lookback_days'])
             print(f'[API CATALOG] {total} публичных ID с точными датами. История №1 не переносилась.')
         if mode == 'preview':
             found = command_action_candidates(db,selected,cfg['lookback_days'],1,1)
@@ -1178,7 +1182,7 @@ def run_account2_mode(args, parser) -> int:
         try:
             run_command_actions(db,cfg,selected,likes=likes,reposts=reposts,
                         max_posts=args.max_posts,pause=cfg['read_pause_seconds'],
-                        profile=accounts.profile_for_account(2),
+                        profile=accounts.profile_for_account(account),
                         identity_guard=lambda context: smoke._live_identity(context,vk_id))
         finally:
             try:
@@ -1194,6 +1198,15 @@ def main(argv: list[str] | None = None) -> int:
     modes.add_argument('--login-only',action='store_true',help='Ручной первый вход без действий, отдельный Chromium-профиль')
     modes.add_argument('--check-account',action='store_true',help='Проверить VK ID и сохранённую сессию, без действий')
     modes.add_argument('--accounts-report',action='store_true',help='Локальный список привязок аккаунтов, без сети')
+    modes.add_argument('--account-add',nargs='?',const='',metavar='NAME',help='Создать отключённый аккаунт с отдельным профилем')
+    modes.add_argument('--queue-enable',action='store_true',help='Включить подтверждённый аккаунт в очередь')
+    modes.add_argument('--queue-disable',action='store_true',help='Сразу выключить аккаунт из очереди, сохранить историю')
+    modes.add_argument('--account-configure',action='store_true',help='Задать индивидуальные дневные лимиты')
+    modes.add_argument('--posts-report',action='store_true',help='Последние100 API постов и доступные счётчики, без сети')
+    modes.add_argument('--dashboard-report',action='store_true',help='JSON снимок очереди/аккаунтов/результатов без сети')
+    modes.add_argument('--login-start',action='store_true',help='Открыть профиль в интерактивном рабочем столе VM')
+    modes.add_argument('--login-status',action='store_true',help='Статус отдельного окна входа')
+    modes.add_argument('--login-finish',action='store_true',help='Подтвердить обнаруженный VK ID и сохранить профиль')
     modes.add_argument('--test-post',type=str,metavar='GROUP_POST',help='Разовая проверка или тест действия аккаунта №2 на одном API-посте')
     modes.add_argument('--test-status',action='store_true',help='Локальные статусы разового теста аккаунта №2')
     modes.add_argument('--status',action='store_true',help='Только локальный отчёт')
@@ -1206,6 +1219,14 @@ def main(argv: list[str] | None = None) -> int:
     modes.add_argument('--run-actions',action='store_true',help='Лайки и репосты из API, число каждого действия задаётся командой; без лимитов JSON')
     modes.add_argument('--action-status',action='store_true',help='Отчёт числовых запусков из SQLite; без сети')
     modes.add_argument('--pair-status',action='store_true',help='Отчёт кампании лайков и репостов; без сети')
+    modes.add_argument('--scan-all',action='store_true',help='Полный цикл VK API всех включённых групп')
+    modes.add_argument('--engagement-report',action='store_true',help='Известные суммы лайков/репостов API и покрытие')
+    modes.add_argument('--schedule-preview',action='store_true',help='План дня и оставшиеся дневные лимиты, без действий')
+    modes.add_argument('--scheduler-status',action='store_true',help='Состояние ежедневного планировщика')
+    modes.add_argument('--scheduler-once',action='store_true',help='Один такт планировщика; действия только с --confirm')
+    modes.add_argument('--scheduler-daemon',action='store_true',help='Круглосуточный worker; действия 09–19 YEKT')
+    modes.add_argument('--scheduler-stop',action='store_true',help='Завершить worker после текущей операции')
+    modes.add_argument('--scheduler-check',action='store_true',help='Живой браузерный проход без лайков и финальной отправки')
     parser.add_argument('--goal-likes',type=int,default=60,help='Цель теста в новых подтверждённых лайках: 1..60')
     parser.add_argument('--name',default=DEFAULT_CAMPAIGN,help='ID прежнего теста лайков, сохраняется в SQLite')
     parser.add_argument('--pair-name',default=DEFAULT_PAIR_CAMPAIGN,help='ID автоматической кампании 30/30')
@@ -1218,11 +1239,69 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--read-pause',type=float,default=None,help='Пауза между запросами в секундах, не ниже конфигурации')
     parser.add_argument('--confirm',action='store_true',help='Явное разрешение на действия этого запуска')
     parser.add_argument('--config',type=Path,default=multi.CONFIG_PATH)
-    parser.add_argument('--account',type=int,choices=(1,2),default=1,
+    parser.add_argument('--account',type=int,default=1,
                         help='Локальный номер Chromium-профиля (№2: отдельные статусы и ручной запуск)')
     parser.add_argument('--test-actions',choices=('like','repost','both'),default=None,
                         help='Для --test-post: только лайк, только репост или оба действия')
+    parser.add_argument('--repost-community',type=int,default=None,metavar='ID',
+                        help='Репосты в одно выбранное сообщество; без параметра — личная стена')
+    parser.add_argument('--dry-run',action='store_true',
+                        help='С --repost-community: проверить выбор назначения без лайков и отправки')
+    parser.add_argument('--automation-config',type=Path,default=Path(__file__).resolve().parent/'vk_automation.json')
+    parser.add_argument('--like-limit',type=int)
+    parser.add_argument('--personal-limit',type=int)
+    parser.add_argument('--community-limit',type=int)
+    parser.add_argument('--communities',type=str,help='Два ID назначений через запятую; пусто для нулевой квоты')
+    parser.add_argument('--stats-group',type=int,help='Фильтр статистики по ID группы')
     args=parser.parse_args(argv)
+    management=(args.account_add is not None or any((args.queue_enable,args.queue_disable,
+        args.account_configure,args.posts_report,args.dashboard_report,args.login_start,args.login_status,args.login_finish)))
+    limit_args=any(v is not None for v in (args.like_limit,args.personal_limit,args.community_limit,args.communities))
+    if limit_args and not args.account_configure:parser.error('Индивидуальные лимиты используются с --account-configure')
+    if management:
+        if args.confirm or args.likes is not None or args.reposts is not None or args.dry_run:
+            parser.error('Команды управления не выполняют действия VK')
+        import vk_control
+        if args.account_add is not None:request={'operation':'add_account','name':args.account_add}
+        elif args.posts_report:request={'operation':'posts','group_id':args.stats_group}
+        elif args.dashboard_report:request={'operation':'snapshot'}
+        elif args.login_start or args.login_status or args.login_finish:
+            operation='login_start' if args.login_start else 'login_status' if args.login_status else 'login_finish'
+            request={'operation':operation,'account':args.account}
+        else:
+            request={'operation':'configure_account','account':args.account}
+            if args.queue_enable or args.queue_disable:request['enabled']=args.queue_enable
+            for name,value in (('likes',args.like_limit),('personal_reposts',args.personal_limit),('community_reposts',args.community_limit)):
+                if value is not None:request[name]=value
+            if args.communities is not None:
+                try:request['communities']=[int(v.strip()) for v in args.communities.split(',') if v.strip()]
+                except ValueError:parser.error('Нужны числовые ID назначений')
+        import io
+        return vk_control.rpc(io.StringIO(json.dumps(request)),sys.stdout)
+    import vk_accounts
+    try:vk_accounts.profile_for_account(args.account)
+    except ValueError:parser.error('Номер аккаунта не зарегистрирован; используйте --account-add')
+    if any((args.scan_all,args.engagement_report,args.schedule_preview,args.scheduler_status,args.scheduler_once,args.scheduler_daemon,args.scheduler_stop,args.scheduler_check)):
+        import vk_scheduler
+        try:return vk_scheduler.run_cli(args,parser)
+        except (ValueError,OSError,RuntimeError,PlaywrightError,sqlite3.DatabaseError) as exc:
+            print('[SCHEDULER STOP]',type(exc).__name__);return 2
+        except KeyboardInterrupt:
+            print('[SCHEDULER STOP] Interrupted; never retry an uncertain action');return 130
+    if args.repost_community is not None:
+        if not 1<=args.repost_community<=2**53-1:
+            parser.error('--repost-community должен быть положительным числовым ID сообщества')
+        import vk_community
+        try:
+            return vk_community.run_cli(args,parser,run_lock=exclusive_run)
+        except (ValueError,OSError,RuntimeError,PlaywrightError) as exc:
+            print('[COMMUNITY STOP]',exc)
+            return 2
+        except KeyboardInterrupt:
+            print('[COMMUNITY STOP] Прервано; неопределённые действия не повторять')
+            return 130
+    if args.dry_run:
+        parser.error('--dry-run пока используется только с --repost-community')
     if args.login_only or args.check_account or args.accounts_report:
         if args.confirm or args.likes is not None or args.reposts is not None or args.only:
             parser.error('Режим проверки профиля не принимает параметры выполнения действий и выбора постов')
@@ -1249,7 +1328,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     if args.test_actions is not None:
         parser.error('--test-actions допускается только с --test-post')
-    if args.account == 2 and (args.preview or args.run_actions or args.action_status):
+    if args.account != 1 and (args.preview or args.run_actions or args.action_status):
         try:
             return run_account2_mode(args, parser)
         except (ValueError, RunAlreadyActive, OSError, json.JSONDecodeError) as exc:
@@ -1257,7 +1336,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         except engine.PlatformRateLimited as exc:
             import vk_account_smoke as smoke
-            with closing(engine.db_open(smoke.ACCOUNT2_DB)) as db:
+            with closing(engine.db_open(vk_accounts.database_for_account(args.account))) as db:
                 engine.lock_on_platform_warning(db,0,str(exc))
             print('[RATE LIMIT] VK ограничил запросы; дальнейшие действия второго аккаунта запрещены.')
             return 2
@@ -1265,7 +1344,7 @@ def main(argv: list[str] | None = None) -> int:
             import vk_account_smoke as smoke
             message=str(exc)
             if any(word in message.lower() for word in ('captcha','капча','ограничени','подозрительная активность','робот')):
-                with closing(engine.db_open(smoke.ACCOUNT2_DB)) as db:
+                with closing(engine.db_open(vk_accounts.database_for_account(args.account))) as db:
                     engine.lock_on_platform_warning(db,0,message)
             print('[ACCOUNT 2 STOP]',exc)
             return 2
