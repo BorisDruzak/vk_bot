@@ -135,7 +135,7 @@ class RefreshTests(unittest.TestCase):
                           side_effect=app.RunAlreadyActive('activity busy')) as guard:
             result=self.refresh()
         self.assertEqual(result['state'],'deferred')
-        guard.assert_called_once_with(self.path.parent)
+        guard.assert_called_once_with(self.path.resolve().parent)
         self.assertEqual(self.calls,[])
         self.assertFalse(self.lock.exists())
         with closing(engine.db_open(self.path)) as db:
