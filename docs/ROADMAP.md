@@ -168,4 +168,8 @@
 - [x] Разобрать первый uncertain аккаунта2: реальная публикация подтверждена read-only, учёт согласован без повторной отправки; ограниченное ожидание точного подтверждения и безопасные коды причин,129 профильных тестов PASS. Полная дневная приёмка остаётся открыта.
 - [x] Issue#4: offline effective-window diagnostics, семь измеряемых этапов,
   read-only отчёт80слотов и FakeClock-симуляция без изменения guards/плана.
-  См.SCHEDULER_TIMING_DIAGNOSTICS_2026_10_29.md; на VM не установлено.
+  См.SCHEDULER_TIMING_DIAGNOSTICS_2026_10_29.md.
+- [x]29октября14:59:30: установка issue#4,985VM/OK/20skip,10DBbackup,
+  savedplan/history/прежняяпауза сохранены; читающийrecorder наVM проверен.
+- [ ] Live приёмка всехaction-stage spans новой версии после отдельного
+  разрешения снять текущую source-date паузу. См.DEPLOY_TIMING_DIAGNOSTICS_2026_10_29.md.

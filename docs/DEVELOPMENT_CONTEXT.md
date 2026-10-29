@@ -1,5 +1,18 @@
 # ПОЛНЫЙ КОНТЕКСТ РАЗРАБОТКИ — VK Unified / VK Bot
 
+29октября14:59:30YEKT: issue#4 установлен из bf37c10 после зелёногоCI и
+985VM/OK/20Node-skip/442.353с в source-only копии.43файла, existingVM
+vk_web.py POS-overlay сохранён. Backup10DB/integrityok+25JSON;144table/schema
+swapchecks, послеrestart10DB/133таблицы/все схемы и80savedslots сохранены.
+Worker5340/live/attention,stopFalse; прежняя13:29пауза source_date_unavailable
+сохранена. Read-onlyreport80slots/HTTPassetsSHA PASS;15:01 exactactor6/date
+proofPASS и реальные читающиеspans1.109/4.739с, действий0/unpause0.
+Новые actionspans ждут отдельного разрешения на возобновление.
+История106reservations/105verified; старый job-basedreport105 — приближение
+на retry. Расчётбеззадержекне гарантирован: уже был carryover8.753с;
+slot3окно197.591с,4communitymedian-сценарий~265.5с до четвёртогоintent.
+Подробности: DEPLOY_TIMING_DIAGNOSTICS_2026_10_29.md.
+
 29 октября: issue#4 — подготовлена офлайн диагностика effective_window,
 буферизованные7stage spans с median/p95, read-only80-slot отчёт панели и
 FakeClock-симулятор на реальном Worker/State.09:29 воспроизведён3/4; default
