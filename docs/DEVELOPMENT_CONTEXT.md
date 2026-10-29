@@ -1,5 +1,11 @@
 # ПОЛНЫЙ КОНТЕКСТ РАЗРАБОТКИ — VK Unified / VK Bot
 
+29октября: по прямому запросу подготовлена futurepolicy6/54 для прежних
+четырёх50/10/20квот320иокна09–22. DEFAULT4 иtoday4/80immutable; retryтратит
+теже6мест, до7не расширяется. Seed29realWorker54model320/320synthetic,
+allactor80/category50/10/20/dest10/10;исторический80/3-of-4 сохранён.
+Код/проверки/статусустановки: SIX_ACTION_BATCHES_2026_10_29.md.
+
 29октября15:54:23YEKT: после прямого разрешения и свежего15:52exactactor6/date
 proof снята только source_date_unavailable; сохранённый futuregate15:57:59,
 job1152failed/attemptNULL/pass1intent0interrupted неизменён. Worker5340не

@@ -1,0 +1,161 @@
+"""Read-only diagnostics and panel distinguish saved capacity from future policy."""
+from contextlib import ExitStack
+from datetime import datetime, timedelta, timezone
+import json
+from pathlib import Path
+import shutil
+import sqlite3
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import patch
+
+import vk_accounts as accounts
+import vk_control as control
+import vk_schedule_policy as policy
+import vk_scheduler_state as ledger
+import vk_scheduler_timing as timing
+
+
+def four_accounts(size):
+    return policy.validate_config({'end_hour':22,'batch_size':size,'accounts':{
+        str(n):{'likes':50,'personal_reposts':10,'community_reposts':20,
+                'communities':[n*10+1,n*10+2]} for n in (1,2,5,6)}})
+
+
+class SixBatchTimingReportTests(unittest.TestCase):
+    def report(self,capacity,attempts,*,telemetry=True):
+        db=sqlite3.connect(':memory:');self.addCleanup(db.close)
+        db.executescript('CREATE TABLE schedule_days(day,config,slots);'
+            'CREATE TABLE scheduler_batches(day,slot,started_at,finished_at,status);'
+            'CREATE TABLE scheduler_jobs(id,day,slot,status,attempt_id);'
+            'CREATE TABLE scheduler_diagnostics(id,at,event,snapshot);')
+        config=four_accounts(capacity)
+        first=datetime(2026,10,29,4,tzinfo=timezone.utc)
+        slots=[(first+timedelta(seconds=600*i)).isoformat() for i in range(80 if capacity==4 else 54)]
+        db.execute('INSERT INTO schedule_days VALUES(?,?,?)',('2026-10-29',json.dumps(config),json.dumps(slots)))
+        db.execute('INSERT INTO scheduler_batches VALUES(?,?,?,?,?)',
+            ('2026-10-29',0,slots[0],(first+timedelta(seconds=540)).isoformat(),'batch_action_deadline'))
+        for i in range(attempts):
+            db.execute('INSERT INTO scheduler_jobs VALUES(?,?,?,?,?)',(i+1,'2026-10-29',0,
+                'verified' if i==0 else 'uncertain',i+10))
+        if telemetry is not False:
+            snapshot={'at':slots[0],'event':'batch_timing','slot':0,
+                      'effective_window':{} if telemetry=='empty' else {'attempts':attempts,'verified':int(attempts>0)}}
+            db.execute('INSERT INTO scheduler_diagnostics VALUES(?,?,?,?)',(1,slots[0],'batch_timing',json.dumps(snapshot)))
+        before=db.total_changes
+        result=timing.report(db,'2026-10-29',first+timedelta(hours=1))
+        self.assertEqual(db.total_changes,before)
+        return result
+
+    def test_saved_four_capacity_explains_unstarted_fourth_and_retains_legacy_field(self):
+        row=self.report(4,3)['slots'][0]
+        self.assertEqual(row['batch_capacity'],4)
+        self.assertTrue(row['next_not_started_before_intent'])
+        self.assertTrue(row['fourth_not_started_before_intent'])
+        self.assertEqual(row['unfilled'],1)
+
+    def test_saved_six_capacity_explains_unstarted_sixth_without_fourth_claim(self):
+        row=self.report(6,5)['slots'][0]
+        self.assertEqual(row['batch_capacity'],6)
+        self.assertTrue(row['next_not_started_before_intent'])
+        self.assertFalse(row['fourth_not_started_before_intent'])
+        self.assertEqual(row['unfilled'],1)
+
+    def test_six_place_report_separates_324_places_from_320_quota_and_verified(self):
+        result=self.report(6,5)
+        self.assertEqual(result['summary']['theoretical_attempts'],324)
+        self.assertEqual(result['summary']['daily_quota'],320)
+        self.assertEqual(result['summary']['attempts'],5)
+        self.assertEqual(result['summary']['verified'],1)
+
+    def test_empty_legacy_slot_preserves_unknown_measurements(self):
+        result=self.report(6,0,telemetry=False)
+        empty=result['slots'][1]
+        self.assertEqual(empty['batch_capacity'],6)
+        self.assertFalse(empty['telemetry_available'])
+        self.assertIsNone(empty['intent_seconds_available'])
+        self.assertIsNone(empty['refresh_finished_at'])
+        self.assertFalse(empty['next_not_started_before_intent'])
+        self.assertIsNone(result['stages']['click']['median_ms'])
+
+    def test_empty_timing_record_does_not_claim_measured_telemetry(self):
+        row=self.report(6,0,telemetry='empty')['slots'][0]
+        self.assertFalse(row['telemetry_available'])
+        self.assertIsNone(row['intent_seconds_available'])
+        self.assertIsNone(row['refresh_finished_at'])
+
+
+class SixBatchSnapshotTests(unittest.TestCase):
+    def test_snapshot_preserves_saved_four_and_derives_six_future_from_registry(self):
+        current=four_accounts(4);pending=four_accounts(6)
+        # Base template has two actors; only the registry supplies the four actors.
+        base=policy.validate_config({'end_hour':22,'batch_size':6})
+        now=datetime.now(timezone.utc);day=str(policy.local_day(now))
+        first=now.astimezone(policy.LOCAL_TZ).replace(hour=9,minute=0,second=0,microsecond=0)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);db_path=root/'vk_scheduler.sqlite3'
+            state=ledger.State(db_path,{},config=current)
+            state.db.execute('INSERT INTO schedule_days VALUES(?,?,?)',(day,json.dumps(current),
+                json.dumps([(first+timedelta(seconds=540*i)).isoformat() for i in range(80)])))
+            state.db.commit();state.close();before=db_path.read_bytes()
+            registry={'version':1,'accounts':{str(n):{'account':n,'name':f'Actor {n}',
+                'enabled':True,'policy':pending['accounts'][str(n)]} for n in (1,2,5,6)}}
+            with ExitStack() as stack:
+                replacements=[(accounts,'ROOT',root),(accounts,'account_numbers',lambda:[1,2,5,6]),
+                    (accounts,'database_for_account',lambda n:root/f'absent-{n}.sqlite3'),
+                    (accounts,'load_bindings',lambda *args:{'accounts':{}}),
+                    (accounts,'load_registry',lambda:registry),
+                    (accounts,'account_record',lambda n:registry['accounts'][str(n)]),
+                    (accounts,'profile_for_account',lambda n:root/f'profile-{n}'),
+                    (control,'login_status',lambda n:{'state':'idle'})]
+                for module,name,replacement in replacements:stack.enter_context(patch.object(module,name,replacement))
+                stack.enter_context(patch('vk_authentication.status',return_value={'state':'unverified'}))
+                stack.enter_context(patch('vk_connections.enabled',return_value=False))
+                stack.enter_context(patch('vk_statistics_job.status',return_value={}))
+                stack.enter_context(patch('vk_scheduler.load_settings',return_value=(base,{})))
+                result=control.snapshot()
+            self.assertEqual(db_path.read_bytes(),before)
+        scheduler=result['scheduler']
+        self.assertEqual((scheduler['batch_size'],scheduler['batch_count']),(4,80))
+        self.assertEqual((scheduler['pending_batch_size'],scheduler['pending_batch_count']),(6,54))
+        self.assertEqual(scheduler['policy_effective_day'],str(policy.local_day(now)+timedelta(days=1)))
+        self.assertEqual(scheduler['work_window'],{'start_hour':9,'end_hour':22})
+        self.assertEqual(scheduler['pending_work_window'],scheduler['work_window'])
+        self.assertEqual(len(scheduler['slots']),80)
+
+
+@unittest.skipUnless(shutil.which('node'),'Node required for six-place panel regression')
+class SixBatchPanelTests(unittest.TestCase):
+    def render(self,expression):
+        script=r"""
+const fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync(process.argv[1],'utf8'),ctx={};vm.createContext(ctx);
+for(const name of ['timing helpers','schedule batch helpers']){
+  const body=source.match(new RegExp('// BEGIN '+name+'([\\s\\S]*?)// END '+name));
+  if(!body)throw Error(name+' missing');vm.runInContext(body[1],ctx);
+}
+console.log(JSON.stringify(vm.runInContext(process.argv[2],ctx)));
+"""
+        run=subprocess.run([shutil.which('node'),'-e',script,
+            str(Path(__file__).resolve().parents[1]/'web/app.js'),expression],
+            capture_output=True,text=True,encoding='utf-8')
+        self.assertEqual(run.returncode,0,run.stderr)
+        return json.loads(run.stdout)
+
+    def test_reasons_label_saved_sixth_and_legacy_fourth_without_inventing_measurements(self):
+        data=self.render("({six:timingReason({causes:['action_deadline'],batch_capacity:6,attempts:5,next_not_started_before_intent:true,telemetry_available:true}),four:timingReason({causes:[],fourth_not_started_before_intent:true}),unknown:timingReason({causes:[],telemetry_available:false})})")
+        self.assertIn('шестая',data['six']);self.assertNotIn('четвёртая',data['six'])
+        self.assertIn('без intent',data['six']);self.assertIn('четвёртая',data['four'])
+        self.assertIn('не измерялись',data['unknown'])
+        self.assertNotIn('не запускалась',data['unknown'])
+
+    def test_plan_text_distinguishes_saved_today_and_future_capacity(self):
+        data=self.render("({plan:scheduleBatchText({batch_size:4,batch_count:80,pending_batch_size:6,pending_batch_count:54,policy_effective_day:'2026-10-30'}),unknown:scheduleBatchText({})})")
+        self.assertIn('Сегодня',data['plan']);self.assertIn('4',data['plan']);self.assertIn('80',data['plan'])
+        self.assertIn('2026-10-30',data['plan']);self.assertIn('6',data['plan']);self.assertIn('54',data['plan'])
+        self.assertNotIn('подтвержден',data['plan'])
+        self.assertIn('уточняется',data['unknown']);self.assertNotIn('4',data['unknown'])
+
+
+if __name__=='__main__':unittest.main()

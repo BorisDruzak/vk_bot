@@ -3,7 +3,7 @@
     "timezone": "Asia/Yekaterinburg",
     "start_hour": 9,
     "end_hour": 22,
-    "batch_size": 4,
+    "batch_size": 6,
     "old_days": 7,
     "accounts": {
       "1": {

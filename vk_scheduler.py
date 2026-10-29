@@ -371,7 +371,9 @@ class Worker:
             if wait_phase:
                 phase=wait_phase;return self.status(phase,attempted=0)
             self._timing_marks['spacing_ready_at']=self.clock()
-            for _ in range(8):
+            # Retain the legacy eight selections; larger batches keep a bounded
+            # allowance for already/proven-unavailable candidates without spending attempts.
+            for _ in range(max(8,2*self.state.config['batch_size'])):
                 if attempted>=self.state.config['batch_size']:break
                 if policy.local_day(self.clock())!=policy.local_day(started):
                     phase='batch_day_changed';break

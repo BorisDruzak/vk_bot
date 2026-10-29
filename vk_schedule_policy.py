@@ -66,7 +66,7 @@ def validate_config(config=None) -> dict:
     if not (_integer(cfg['start_hour'],9,18) and
             _integer(cfg['end_hour'],10,22) and cfg['start_hour']<cfg['end_hour']):
         raise ValueError('Schedule window must stay within09:00–22:00')
-    if not _integer(cfg['batch_size'],1,4) or not _integer(cfg['old_days'],0,7):
+    if not _integer(cfg['batch_size'],1,6) or not _integer(cfg['old_days'],0,7):
         raise ValueError('Invalid batch size or reserve post age')
     accounts=config.get('accounts',{})
     if not isinstance(accounts,dict) or any(not isinstance(k,str) or not k.isascii() or
@@ -128,7 +128,7 @@ def daily_total(config=None) -> int:
 
 
 def batch_count(config=None) -> int:
-    """Number of batches; each has at most the configured <=4 actions."""
+    """Number of batches; each has at most the configured <=6 attempts."""
     cfg=validate_config(config)
     return max(1,ceil(daily_total(cfg)/cfg['batch_size']))
 

@@ -82,6 +82,7 @@ def report(db,day,now):
     saved=_rows(db,'SELECT config,slots FROM schedule_days WHERE day=?',(str(day),))
     if not saved:return {'day':str(day),'slots':[],'summary':{},'stages':{}}
     cfg=json.loads(saved[0]['config']);slots=json.loads(saved[0]['slots'])
+    capacity=cfg.get('batch_size',4)
     day_start=datetime.fromisoformat(str(day)).replace(tzinfo=policy.LOCAL_TZ)
     E=day_start.replace(hour=cfg.get('end_hour',19))
     batches={r['slot']:r for r in _rows(db,'SELECT * FROM scheduler_batches WHERE day=?',(str(day),))}
@@ -118,16 +119,17 @@ def report(db,day,now):
         selected=[j for j in jobs if j['slot']==i]
         attempts=observed.get('attempts',sum(j['attempt_id'] is not None or j['status']=='attempting' for j in selected))
         counts=Counter(j['status'] for j in selected)
-        result.append({**window,'slot':i,'status':status,'telemetry_available':i in by_slot,
+        result.append({**window,'slot':i,'status':status,'telemetry_available':bool(observed),
                        'attempts':attempts,'verified':observed.get('verified',counts['verified']),'uncertain':counts['uncertain'],
-                       'unfilled':max(0,cfg.get('batch_size',4)-attempts),
-                       'fourth_not_started_before_intent':status=='batch_action_deadline' and attempts==3,
+                       'batch_capacity':capacity,'unfilled':max(0,capacity-attempts),
+                       'next_not_started_before_intent':status=='batch_action_deadline' and 0<attempts<capacity,
+                       'fourth_not_started_before_intent':capacity==4 and status=='batch_action_deadline' and attempts==3,
                        'unclaimed_after_grace':status=='missed'})
     from vk_action_timing import summarize
     counts=Counter(r['status'] for r in result)
     return {'day':str(day),'slots':result,'stages':summarize(stage_samples),
             'diagnostics_truncated':truncated,
-            'summary':{'theoretical_attempts':len(slots)*cfg.get('batch_size',4),
+            'summary':{'theoretical_attempts':len(slots)*capacity,'daily_quota':policy.daily_total(cfg),
                        'attempts':sum(r['attempts'] for r in result),'verified':sum(j['status']=='verified' for j in jobs),
                        'missed':counts['missed'],'empty':sum(r['attempts']==0 and r['finished_at'] is not None for r in result),
-                       'partial':sum(0<r['attempts']<cfg.get('batch_size',4) and r['finished_at'] is not None for r in result)}}
+                       'partial':sum(0<r['attempts']<capacity and r['finished_at'] is not None for r in result)}}

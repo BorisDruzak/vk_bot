@@ -40,6 +40,8 @@
 #timing-slots table{min-width:1050px}#timing-slots td:last-child{min-width:230px;max-width:370px;white-space:normal}
 #timing-slots{max-height:540px;overflow:auto}#timing-slots th{position:sticky;top:0;z-index:1}
 .timing-marks{font-size:12px;line-height:1.7;white-space:nowrap}
+.batch-policy{padding:0 30px 18px;overflow-wrap:anywhere}
+@media(max-width:850px){.batch-policy{padding:0 18px 16px}}
 
 #analytics .analytics-filters{display:flex;gap:18px;flex-wrap:wrap;align-items:end;margin:16px 0}
 #analytics .analytics-filters label{min-width:180px;max-width:100%;flex:1}

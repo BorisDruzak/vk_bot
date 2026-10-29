@@ -296,6 +296,9 @@ def snapshot():
     pending=accounts.effective_policy(base)
     for key,cfg in (('work_window',effective),('pending_work_window',pending)):
         result['scheduler'][key]={name:cfg[name] for name in ('start_hour','end_hour')}
+    for prefix,cfg in (('',effective),('pending_',pending)):
+        result['scheduler'][prefix+'batch_size']=cfg['batch_size']
+        result['scheduler'][prefix+'batch_count']=policy.batch_count(cfg)
     return result
 
 
