@@ -1,5 +1,16 @@
 # ПОЛНЫЙ КОНТЕКСТ РАЗРАБОТКИ — VK Unified / VK Bot
 
+30октября10:30:37YEKT: по явному разрешению снята только source_date_unavailable
+от29Oct20:46:44/job1245. Freshproof10:29:44–10:29:56: exactactor1/source-date
+matched, vk-post-json/exact/29Oct20:19:57,0actions/0APIreads. Job1245failed,
+pass1intent0/attemptNULL/interrupted сохранён. Exclusivelease+BEGIN IMMEDIATE,
+schedulerbackup/integrityok; менялись только paused/resume_not_before.
+Gate — будущийsaved-slot10:44:39, безcatchup/пересозданияплана. Приёмка10:31:10:
+worker3592безrestart/live/waiting_batch,pausedNULL/stopFalse; всеsavedplans/
+jobs/passes/recovery/изоляции,actorтаблицы/квоты/registry/bindings неизменны.
+Today67/390/55six12five; перваябудущаяпачканаэтапеприёмкиещёне началась.
+См.RESUME_SOURCE_DATE_2026_10_30.md. Разрешение не распространяется на новые паузы.
+
 29октября19:43:55YEKT: auth088073a установлен19:42:34 после exactgreen
 Linux/Windows+OMSUCI, local1087PASS/312.555с,VM1087PASS/24Node-skip/618.533с.
 Одиночный stagedusers.get подтвердил exactown-headeralias; производственного
