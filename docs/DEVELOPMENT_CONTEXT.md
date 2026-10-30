@@ -1,5 +1,13 @@
 # ПОЛНЫЙ КОНТЕКСТ РАЗРАБОТКИ — VK Unified / VK Bot
 
+30октября: подготовлены initial+3 date-reading windows/typed skip безpause
+и два видаschedulerblock. Manual не истекает, automatic — на следующем
+более позднем savedday в будущийsavedslot. Exactdate receipt сохраняет
+attempt/intent/uncertain/spend, не разрешает resend; oldjobs1244/1245 прежние.
+Новыеучасткитестов/review/desktop+mobilePASS; полныйUTF8 local1116PASS/317.471с.
+CI/VM/deploy gates покаожидаются. См.SOURCE_DATE_BLOCKS_2026_10_30.md
+и plan30Oct-source-date-and-blocks.
+
 30октября10:30:37YEKT: по явному разрешению снята только source_date_unavailable
 от29Oct20:46:44/job1245. Freshproof10:29:44–10:29:56: exactactor1/source-date
 matched, vk-post-json/exact/29Oct20:19:57,0actions/0APIreads. Job1245failed,

@@ -1,5 +1,13 @@
 # Архитектура VK Unified (v6.34)
 
+30октября: SourceDateUnavailable после initial+3 bounded date-reading
+windows получает отдельную exact receipt scheduler_date_skips: без pause,
+без повторной отправки, со spentquota/intent/uncertain и actor/day exclusion.
+State.pause хранит тип через vk_scheduler_blocks, manual сохраняется,
+automatic истекает на более позднем сохранённом дне с будущимsavedslotgate.
+Legacy безmetadata manual, actor safety/unknown результаты не очищаются.
+Контракт и результаты: SOURCE_DATE_BLOCKS_2026_10_30.md.
+
 `accounts.future_policy(registry)` объединяет настроенную policy из
 vk_automation.json с реестром и используется в configure_account/connect.
 Явный end_hour допускает22; DEFAULT_CONFIG19 и сохранённые dayplans прежние.

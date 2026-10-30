@@ -244,7 +244,7 @@ class RetryStateTests(unittest.TestCase):
         error.__cause__=scheduler.actions.PlaywrightError('fixed')
         self.assertTrue(retry.retryable(error,{'status':'dispatching','attempt_id':None,'kind':'personal'}))
 
-    def test_expired_pending_is_counted_once_even_without_a_fresh_action_pool(self):
+    def test_expired_pending_is_held_without_counting_as_a_new_day_failure(self):
         import vk_action_retry as retry
         job=self.state.create_job(self.now,1,*self.pick(self.now));book=retry.RetryLedger(self.state)
         book.begin(job,self.now);book.fail_pass(job,'OSError',self.now);book.pending(job,self.now)
@@ -252,7 +252,7 @@ class RetryStateTests(unittest.TestCase):
         with patch.object(self.worker,'scan_step',return_value=None),patch.object(self.worker,'pick',return_value=None):
             self.worker.tick(execute=True);self.worker.tick(execute=True)
         self.assertEqual(book.job_snapshot(job)['state'],'held')
-        self.assertEqual(self.state.get('action_failure_streak'),1)
+        self.assertEqual(self.state.get('action_failure_streak'),0)
 
 
 if __name__=='__main__':unittest.main()

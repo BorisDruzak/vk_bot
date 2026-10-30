@@ -13,7 +13,7 @@ GUARDS={'footer_unknown','footer_root_missing','footer_wrong_primary','footer_ne
         'footer_like_state_unknown','footer_like_label_conflict','footer_share_not_unique','footer_action_invalid',
         'footer_scroll_failed','footer_like_already_set','pre_action_source_missing','pre_action_like_state_conflict',
         'pre_action_state_unknown','pre_action_permission_unproven'}
-TYPES={'StopRun','ActionGuardError','ActionConfirmationError','ScheduledActionStopped','CommunityConfirmationError','CommunityPreparationTimeout',
+TYPES={'StopRun','ActionGuardError','ActionConfirmationError','ScheduledActionStopped','SourceDateUnavailable','CommunityConfirmationError','CommunityPreparationTimeout',
        'ActionTransportError',
        'PlatformRateLimited','PostUnavailable','PostTemporaryError','PostMarkupUnknown','RuntimeError','ValueError',
        'TypeError','KeyError','AttributeError','OperationalError','DatabaseError','IntegrityError','OSError',
@@ -95,7 +95,7 @@ def make_record(event,*,now=None,error=None,observation=None,**data):
         elif key=='stage' and type(value) is str and value in STAGES:out[key]=value
         elif key=='phase' and type(value) is str and value in PHASES:out[key]=value
         elif key=='reason' and type(value) is str and value in REASONS:out[key]=value
-        elif key=='outcome' and value in ('verified','already','failed','uncertain','skipped_vk','unavailable','ready','budget','empty','stopped'):out[key]=value
+        elif key=='outcome' and value in ('verified','already','failed','uncertain','skipped_vk','date_skipped','unavailable','ready','budget','empty','stopped'):out[key]=value
         elif key=='endpoint' and value in ('like_ui','wall_ui','likes_add','wall_repost'):out[key]=value
         elif key=='network_error' and type(value) is str and value in NETWORK_ERRORS:out[key]=value
         elif key=='request_method' and value in ('GET','POST'):out[key]=value

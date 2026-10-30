@@ -51,13 +51,15 @@ def prime_action_identity(context,*,deadline=None,before_request=None):
             deadline=deadline,before_request=before_request)
 
 
-def source_ready(page,gid,pid,stamp,guard,*,timings=None):
-    """Navigate once; allow exact metadata to hydrate without retrying a send.
+class SourceDateUnavailable(ScheduledActionStopped):
+    """Four bounded read windows exhausted; never permission to send again."""
+    def __init__(self):
+        super().__init__('source_date_unavailable','Точная дата не прочитана после трёх повторов')
+        self.read_attempts=4
 
-    A visible root is not proof its date has arrived. Missing metadata may be
-    polled for up to nine seconds; conflicting/mismatched dates fail at once.
-    Every read rechecks identity/platform protection. No fallback date is used.
-    """
+
+def source_ready(page,gid,pid,stamp,guard,*,timings=None,before_read=None):
+    """Navigate once, then retry only date reading, at most three times."""
     if timings is None:timings=getattr(guard,'__dict__',{}).get('stage_timings')
     try:
         with action_timing.measure(timings,'source_navigation'):
@@ -65,25 +67,34 @@ def source_ready(page,gid,pid,stamp,guard,*,timings=None):
     except engine.PlatformRateLimited:raise
     except (engine.StopRun,PlaywrightError) as exc:
         raise ScheduledActionStopped('source_navigation',str(exc)) from exc
-    deadline=time.monotonic()+9
-    while True:
+    def checked():
+        if before_read is not None:before_read()
         try:guard()
         except engine.PlatformRateLimited:raise
         except (engine.StopRun,PlaywrightError) as exc:
             raise ScheduledActionStopped('source_guard',str(exc)) from exc
-        try:info=groups.exact_post_date_info(page,gid,pid)
-        except PlaywrightError as exc:
-            raise ScheduledActionStopped('source_date_read',str(exc)) from exc
-        actual=info.get('publishedAt')
-        if info.get('source')=='date-conflict':
-            raise ScheduledActionStopped('source_date_conflict','Противоречивые точные даты исходного поста')
-        if type(actual) is int:
-            if actual!=stamp:
-                raise ScheduledActionStopped('source_date_mismatch','Дата точного исходного поста отличается от VK API')
-            return
-        if time.monotonic()>=deadline:
-            raise ScheduledActionStopped('source_date_unavailable','Точная дата исходного поста не появилась за9секунд')
-        page.wait_for_timeout(250)
+    last_error=None
+    for attempt in range(4):
+        deadline=time.monotonic()+9
+        while True:
+            checked()
+            try:info=groups.exact_post_date_info(page,gid,pid)
+            except PlaywrightError as exc:
+                # A browser read fault gains no exemption from fresh guards.
+                checked();last_error=exc
+                if attempt<3:page.wait_for_timeout(250)
+                break
+            actual=info.get('publishedAt')
+            if info.get('source')=='date-conflict':
+                raise ScheduledActionStopped('source_date_conflict','Противоречивые точные даты исходного поста')
+            if type(actual) is int:
+                if actual!=stamp:
+                    raise ScheduledActionStopped('source_date_mismatch','Дата точного исходного поста отличается от VK API')
+                return
+            if time.monotonic()>=deadline:break
+            page.wait_for_timeout(250)
+    checked()
+    raise SourceDateUnavailable() from last_error
 
 
 class _SingleBudget:
@@ -361,7 +372,7 @@ def execute_action(account,kind,row,*,before_attempt,record_attempt,config_path=
                         stage='source_navigation'
                         report('action_stage')
                         engine.require_platform_unlocked(db)
-                        source_ready(page,gid,pid,stamp,guard)
+                        source_ready(page,gid,pid,stamp,guard,before_read=before_identity_read)
                         stage='source_date_read'
                         report('action_stage')
                     budget=_SingleBudget(db,kind,gid,pid,destination,run_id,guard,before_attempt,record_attempt,before_click,report,

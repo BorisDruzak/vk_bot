@@ -30,6 +30,8 @@ def init_schema(db):
         outcome TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',baseline INTEGER,
         intent INTEGER NOT NULL DEFAULT 0,started_at TEXT NOT NULL,finished_at TEXT,
         PRIMARY KEY(job_id,pass));
+      CREATE TABLE IF NOT EXISTS scheduler_date_skips(
+        job_id INTEGER PRIMARY KEY,evidence TEXT NOT NULL);
     ''')
 
 
@@ -73,6 +75,7 @@ class RetryLedger:
             self.db.execute("INSERT INTO scheduler_action_passes(job_id,pass,outcome,started_at) VALUES(?,1,'running',?)",(job,now.isoformat()))
 
     def exempts(self,j):
+        if self.date_skipped(j):return True
         r=self.row(j['id'])
         if (not self.enabled or not r or j['status']!='uncertain' or j['attempt_id'] is None
                 or r['identity']!=_identity(j) or r['current_attempt']!=j['attempt_id'] or r['reason']!=j['reason']
@@ -83,6 +86,54 @@ class RetryLedger:
             if not pending_pass or tuple(pending_pass)!=('deferred',0,None):return False
         p=self.db.execute('SELECT 1 FROM scheduler_action_passes WHERE job_id=? AND attempt_id=? AND outcome=\'uncertain\'',(j['id'],j['attempt_id'])).fetchone()
         return bool(p)
+
+    def date_skipped(self,j):
+        """Only an exact durable date-skip receipt exempts preserved uncertainty."""
+        if not self.state.table(self.db,'scheduler_date_skips'):return False
+        saved=self.db.execute('SELECT evidence FROM scheduler_date_skips WHERE job_id=?',(j['id'],)).fetchone()
+        r=self.row(j['id'])
+        if not saved or not r or r['state']!='date_skipped':return False
+        try:e=json.loads(saved[0])
+        except (ValueError,TypeError):return False
+        p=self.db.execute('SELECT * FROM scheduler_action_passes WHERE job_id=? AND pass=?',(j['id'],r['passes'])).fetchone()
+        return bool(p and e=={'identity':_identity(j),'reason':j['reason'],'attempt_id':j['attempt_id'],
+            'baseline':j['baseline'],'pass':r['passes'],'intent':p['intent'],'pass_attempt_id':p['attempt_id'],
+            'read_attempts':4} and r['identity']==_identity(j) and r['current_attempt']==j['attempt_id']
+            and r['reason']==j['reason'] and p['outcome']=='date_skipped' and p['reason']=='action_stopped_source_date_unavailable')
+
+    def skip_date(self,job,now):
+        legacy=not self.enabled and self.row(job) is None
+        if legacy:
+            j=self.job(job)
+            if not j or j['status'] not in ('dispatching','attempting'):return False
+            r={'passes':1}
+            p={'baseline':j['baseline'],'attempt_id':j['attempt_id'],
+               'intent':int(j['status']=='attempting' or j['attempt_id'] is not None)}
+        else:
+            r,j=self._running(job)
+            p=self.db.execute('SELECT * FROM scheduler_action_passes WHERE job_id=? AND pass=?',(job,r['passes'])).fetchone()
+        # A hidden reservation cannot gain an exemption through a date error.
+        with self.state.account_db(j['account']) as actor:
+            baseline=p['baseline'] if p['baseline'] is not None else j['baseline']
+            fresh=actor.execute('SELECT id FROM action_attempts WHERE id>?',(baseline,)).fetchall()
+        if fresh!=([] if p['attempt_id'] is None else [(p['attempt_id'],)]):return False
+        uncertain=j['attempt_id'] is not None or j['status']=='attempting' or bool(p['intent'])
+        reason='action_stopped_source_date_unavailable'
+        evidence={'identity':_identity(j),'reason':reason,'attempt_id':j['attempt_id'],'baseline':j['baseline'],
+                  'pass':r['passes'],'intent':p['intent'],'pass_attempt_id':p['attempt_id'],'read_attempts':4}
+        with self.db:
+            if legacy:
+                self.db.execute("INSERT INTO scheduler_action_recovery VALUES(?,?,?,'running',1,'',?,0,?)",
+                    (job,_identity(j),j['attempt_id'],self.owner(),now.isoformat()))
+                self.db.execute("INSERT INTO scheduler_action_passes(job_id,pass,attempt_id,outcome,baseline,intent,started_at) VALUES(?,1,?,'running',?,?,?)",
+                    (job,j['attempt_id'],p['baseline'],p['intent'],now.isoformat()))
+            self.db.execute('UPDATE scheduler_jobs SET status=?,reason=? WHERE id=?',('uncertain' if uncertain else 'failed',reason,job))
+            self.db.execute("UPDATE scheduler_action_passes SET outcome='date_skipped',reason=?,finished_at=? WHERE job_id=? AND pass=?",
+                (reason,now.isoformat(),job,r['passes']))
+            self.db.execute("UPDATE scheduler_action_recovery SET state='date_skipped',reason=?,updated_at=? WHERE job_id=?",
+                (reason,now.isoformat(),job))
+            self.db.execute('INSERT INTO scheduler_date_skips VALUES(?,?)',(job,json.dumps(evidence,sort_keys=True)))
+        return True
 
     def _running(self,job):
         r=self.row(job);j=self.job(job)
@@ -184,15 +235,15 @@ class RetryLedger:
             self.db.execute("UPDATE scheduler_action_recovery SET state='complete',reason='',updated_at=? WHERE job_id=?",(now.isoformat(),job))
             self.db.execute("INSERT INTO scheduler_meta VALUES('action_failure_streak','0') ON CONFLICT(key) DO UPDATE SET value='0'")
 
-    def hold(self,job,now):
+    def hold(self,job,now,*,count_failure=True):
         r=self.row(job)
         if not r or r['state'] not in ('running','pending','held'):raise RuntimeError('Cannot hold unknown recovery')
         if r['counted']:return
-        count=self.state.get('action_failure_streak',0)+1
+        count=self.state.get('action_failure_streak',0)+(1 if count_failure else 0)
         with self.db:
             self.db.execute("UPDATE scheduler_action_recovery SET state='held',counted=1,updated_at=? WHERE job_id=?",(now.isoformat(),job))
             self.db.execute("INSERT INTO scheduler_meta VALUES('action_failure_streak',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(count),))
-            if count>=3:self.db.execute("INSERT INTO scheduler_meta VALUES('paused',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps('action_failures_repeated'),))
+        if count_failure and count>=3:self.state.pause('action_failures_repeated',now=now)
 
     def interrupt(self,job,now):
         if not self.row(job):return
@@ -235,7 +286,7 @@ class RetryLedger:
         if not self.enabled or not self.exists():return
         for r in self.db.execute('''SELECT r.job_id FROM scheduler_action_recovery r JOIN scheduler_jobs j ON j.id=r.job_id
           WHERE r.state='pending' AND j.day<? ORDER BY r.job_id''',(str(policy.local_day(now)),)).fetchall():
-            self.hold(r['job_id'],now)
+            self.hold(r['job_id'],now,count_failure=False)
 
 
 def retryable(error,job):
@@ -281,6 +332,7 @@ def actor_uncertainties_safe(state):
             keys=set()
             for j in approved:
                 if j['account']!=account:continue
+                if j['attempt_id'] is None and book.date_skipped(j):continue
                 a=db.execute('SELECT group_id,post_id,action FROM action_attempts WHERE id=?',(j['attempt_id'],)).fetchone()
                 if a!=(j['group_id'],j['post_id'],'like' if j['kind']=='like' else 'repost'):return False
                 if j['kind']=='community':
@@ -350,6 +402,13 @@ def execute_job(worker,job,row,slot,capacity):
             log('action_failed',reason=reason,outcome='uncertain' if current['attempt_id'] is not None or current['status']=='attempting' else 'failed',attempt_id=current['attempt_id'],stage=getattr(exc,'stage',None),observation=getattr(exc,'observation',None),error=exc)
             if isinstance(exc,engine.ActionConfirmationError):state.set('last_action_confirmation',{'job':job,'at':worker.clock().isoformat(),'reason':reason,'observation':exc.observation})
             p=state.db.execute('SELECT * FROM scheduler_action_passes WHERE job_id=? AND pass=?',(job,r['passes'])).fetchone()
+            if date_skip_error(exc) and book.skip_date(job,worker.clock()):
+                if p['intent'] and p['attempt_id'] is None:attempted+=1
+                if state.blocked() or not actor_uncertainties_safe(state):
+                    state.pause('StopRun')
+                    return {'attempted':attempted,'phase':'attention','skipped':0}
+                log('action_result',outcome='date_skipped',reason='action_stopped_source_date_unavailable',attempt_id=current['attempt_id'])
+                return {'attempted':attempted,'phase':None,'skipped':0}
             _,end=policy.work_bounds(worker.clock(),state.config)
             identity_deadline=isinstance(exc,actions.accounts.IdentityPreparationDeadline)
             normal_stop=(identity_deadline or state.get('stop_requested',False) or not state.account_enabled(current['account'])
@@ -391,3 +450,15 @@ def execute_job(worker,job,row,slot,capacity):
             if state.get('stop_requested',False) or not policy.in_work_window(worker.clock(),state.config):
                 return {'attempted':attempted,'phase':worker.batch_stop_phase(worker.clock(),day=current['day']),'skipped':0}
             book.begin_retry(job,worker.clock())
+
+
+def date_skip_error(error):
+    """No nested guard/protection/cleanup can be hidden by this typed result."""
+    import vk_scheduled_action as actions
+    if type(error) is not actions.SourceDateUnavailable or error.read_attempts!=4:return False
+    if error.stage!='source_date_unavailable' or error.reason_code!='action_stopped_source_date_unavailable':return False
+    seen={id(error)};current=error.__cause__ or error.__context__
+    while current is not None:
+        if id(current) in seen or len(seen)>=8 or not isinstance(current,actions.PlaywrightError):return False
+        seen.add(id(current));current=current.__cause__ or current.__context__
+    return True

@@ -13,9 +13,10 @@ class SchedulerCliTests(unittest.TestCase):
         fake=SimpleNamespace(run_cli=lambda args,parser:seen.append(args) or 0)
         with patch.dict('sys.modules',{'vk_scheduler':fake}):
             for mode in ('--scan-all','--engagement-report','--schedule-preview','--scheduler-status',
-                         '--scheduler-once','--scheduler-daemon','--scheduler-stop','--scheduler-check'):
+                         '--scheduler-once','--scheduler-daemon','--scheduler-stop','--scheduler-check',
+                         '--scheduler-manual-block','--scheduler-manual-unblock'):
                 self.assertEqual(app.main([mode]),0)
-        self.assertEqual(len(seen),8)
+        self.assertEqual(len(seen),10)
         self.assertEqual(sum(a.scheduler_daemon for a in seen),1)
 
     def test_only_one_scheduler_mode_allowed(self):

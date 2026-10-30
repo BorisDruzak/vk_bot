@@ -56,6 +56,19 @@ class SelectionPerformanceTests(unittest.TestCase):
                 self.rows(kind,target,account,context)
             self.assertEqual(activity.call_count,1)
 
+    def test_date_skip_excludes_all_categories_only_for_same_actor_and_day(self):
+        import vk_action_retry as retry
+        self.state.set('action_retry_policy',1)
+        job=self.state.create_job(self.now,0,1,'like',0,{'group_id':101,'post_id':7,'published_at':int(self.now.timestamp())-7})
+        book=retry.RetryLedger(self.state);book.begin(job,self.now)
+        self.assertTrue(book.skip_date(job,self.now))
+        context=self.context()
+        for kind,target in (('like',0),('personal',0),('community',201)):
+            self.assertNotIn(7,[r['post_id'] for r in self.rows(kind,target,1,context)])
+        self.assertIn(7,[r['post_id'] for r in self.rows('like',0,2,context)])
+        self.now+=timedelta(days=1)
+        self.assertIn(7,[r['post_id'] for r in self.rows('like',0,1,self.context())])
+
     def test_bulk_exclusions_preserve_signed_canonical_and_all_job_statuses(self):
         with closing(engine.db_open(self.source)) as db:
             db.execute("UPDATE posts SET like_status='uncertain' WHERE post_id=1")

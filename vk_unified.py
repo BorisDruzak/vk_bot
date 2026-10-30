@@ -1226,6 +1226,8 @@ def main(argv: list[str] | None = None) -> int:
     modes.add_argument('--scheduler-once',action='store_true',help='Один такт планировщика; действия только с --confirm')
     modes.add_argument('--scheduler-daemon',action='store_true',help='Круглосуточный worker; действия 09–19 YEKT')
     modes.add_argument('--scheduler-stop',action='store_true',help='Завершить worker после текущей операции')
+    modes.add_argument('--scheduler-manual-block',action='store_true',help='Ручной блок очереди до явного снятия')
+    modes.add_argument('--scheduler-manual-unblock',action='store_true',help='Снять только явный ручной блок, продолжить с будущего слота')
     modes.add_argument('--scheduler-check',action='store_true',help='Живой браузерный проход без лайков и финальной отправки')
     parser.add_argument('--goal-likes',type=int,default=60,help='Цель теста в новых подтверждённых лайках: 1..60')
     parser.add_argument('--name',default=DEFAULT_CAMPAIGN,help='ID прежнего теста лайков, сохраняется в SQLite')
@@ -1281,7 +1283,7 @@ def main(argv: list[str] | None = None) -> int:
     import vk_accounts
     try:vk_accounts.profile_for_account(args.account)
     except ValueError:parser.error('Номер аккаунта не зарегистрирован; используйте --account-add')
-    if any((args.scan_all,args.engagement_report,args.schedule_preview,args.scheduler_status,args.scheduler_once,args.scheduler_daemon,args.scheduler_stop,args.scheduler_check)):
+    if any((args.scan_all,args.engagement_report,args.schedule_preview,args.scheduler_status,args.scheduler_once,args.scheduler_daemon,args.scheduler_stop,args.scheduler_check,args.scheduler_manual_block,args.scheduler_manual_unblock)):
         import vk_scheduler
         try:return vk_scheduler.run_cli(args,parser)
         except (ValueError,OSError,RuntimeError,PlaywrightError,sqlite3.DatabaseError) as exc:

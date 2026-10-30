@@ -69,7 +69,21 @@ class State:
                         (key,json.dumps(value,ensure_ascii=False)))
         self.db.commit()
 
-    def pause(self,reason):self.set('paused',str(reason))
+    def pause(self,reason,*,kind='automatic',now=None):
+        import vk_scheduler_blocks as blocks
+        return blocks.pause(self,reason,kind=kind,now=now)
+
+    def block_status(self):
+        import vk_scheduler_blocks as blocks
+        return blocks.status(self)
+
+    def expire_automatic_block(self,now):
+        import vk_scheduler_blocks as blocks
+        return blocks.expire(self,now)
+
+    def clear_manual_block(self,*,now=None):
+        import vk_scheduler_blocks as blocks
+        return blocks.clear_manual(self,now=now)
 
     def log_event(self,event,now,**data):
         try:
@@ -420,6 +434,8 @@ class State:
         return {'now':now,'source':Path(source_path).resolve(),'owner':self,
                 'selected':selected,'rows':self.prioritize(rows,now),'actors':{},
                 'isolated':{tuple(r) for r in self.db.execute('SELECT account,group_id,post_id FROM scheduler_post_isolations')},
+                'date_skips':{tuple(r) for r in self.db.execute('''SELECT j.account,j.group_id,j.post_id FROM scheduler_date_skips s
+                    JOIN scheduler_jobs j ON j.id=s.job_id WHERE j.day=?''',(str(policy.local_day(now)),))},
                 'jobs':{tuple(r) for r in self.db.execute('''SELECT account,kind,community_id,group_id,post_id
                     FROM scheduler_jobs WHERE day=?''',(str(policy.local_day(now)),))}}
 
@@ -450,6 +466,7 @@ class State:
         for row in context['rows']:
             gid,pid=row['group_id'],row['post_id'];cfg=context['selected'].get(gid)
             if (account,gid,pid) in context['isolated']:continue
+            if (account,gid,pid) in context.get('date_skips',set()):continue
             if not cfg or not cfg.get('like_enabled' if kind=='like' else 'repost_enabled'):continue
             if (account,kind,community_id,gid,pid) in context['jobs']:continue
             post=actor['posts'].get((gid,pid))

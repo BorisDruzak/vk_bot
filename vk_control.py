@@ -280,6 +280,7 @@ def snapshot():
             latest=db.execute('SELECT MAX(day) FROM schedule_days').fetchone()[0]
             day=(max(policy.local_day(now),datetime.fromisoformat(latest).date())+timedelta(days=1) if latest else policy.local_day(now))
             result['scheduler']={'heartbeat':state.get('heartbeat'),'paused':state.get('paused'),
+                'block':state.block_status(),
                 'active_uncertain':state.active_uncertain_count(),
                 'isolated_posts':db.execute('SELECT COUNT(*) FROM scheduler_post_isolations').fetchone()[0],
                 'slots':json.loads(saved[0]) if saved else [],

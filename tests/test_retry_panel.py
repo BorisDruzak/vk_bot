@@ -16,12 +16,13 @@ import vk_scheduler_state as ledger
 
 @unittest.skipUnless(shutil.which('node'), 'Node.js required for frontend regression')
 class RetryPanelRenderingTests(unittest.TestCase):
-    def render(self, retry=None, recovery=None, job_status='uncertain'):
+    def render(self, retry=None, recovery=None, job_status='uncertain',block=None):
         fixture = {'scheduler':{}, 'accounts':[], 'posts':[], 'groups':[], 'jobs':[
             {'id':120, 'account':1, 'kind':'like', 'group_id':101, 'post_id':5,
              'status':job_status, 'reason':'confirmation_unknown', 'attempt_id':91}]}
         if retry is not None:
             fixture['scheduler']['action_retry'] = retry
+        if block is not None:fixture['scheduler'].update(block=block,paused=block['reason'])
         if recovery is not None:
             fixture['jobs'][0]['recovery'] = recovery
         script = r"""
@@ -53,6 +54,12 @@ console.log(JSON.stringify({safety:elements.get('safety-state').textContent,jobs
                                  json.dumps(fixture)], capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
+
+    def test_manual_and_automatic_block_labels_are_distinct(self):
+        manual=self.render(block={'kind':'manual','reason':'manual_block'})['safety']
+        automatic=self.render(block={'kind':'automatic','reason':'OSError'})['safety']
+        self.assertIn('Ручной блок',manual);self.assertIn('вручную',manual)
+        self.assertIn('Автоматический блок',automatic);self.assertIn('следующего запланированного дня',automatic)
 
     def test_held_uncertainty_shows_both_attempts_and_failure_streak(self):
         data = self.render(

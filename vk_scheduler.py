@@ -150,6 +150,7 @@ class Worker:
             future=([datetime.fromisoformat(t) for t in json.loads(saved[0])] if saved
                     else [policy.work_bounds(tomorrow,self.state.config)[0]])
         report={'at':now.isoformat(),'phase':phase,'day':str(policy.local_day(now)),
+                'block':self.state.block_status(),
                 'mode':self.state.get('execution_mode','preview'),
                 'action_retry':action_retry.RetryLedger(self.state).summary(),
                 'next_batch':future[0].astimezone(policy.LOCAL_TZ).isoformat(),'pid':os.getpid(),'active_slot':self._active_slot,
@@ -447,6 +448,12 @@ class Worker:
                     saved=self.state.db.execute('SELECT * FROM scheduler_jobs WHERE id=?',(job,)).fetchone()
                     uncertain=saved['status']=='attempting' or saved['attempt_id'] is not None
                     reason=safe_failure_reason(exc)
+                    if action_retry.date_skip_error(exc) and action_retry.RetryLedger(self.state).skip_date(job,self.clock()):
+                        attempted+=int(uncertain)
+                        if self.state.blocked() or not action_retry.actor_uncertainties_safe(self.state):
+                            self.state.pause('StopRun');phase='attention';break
+                        log_action('action_result',outcome='date_skipped',reason=reason,attempt_id=saved['attempt_id'])
+                        continue
                     if isinstance(exc,engine.ActionConfirmationError):
                         self.state.set('last_action_confirmation',{'job':job,'at':self.clock().isoformat(),
                             'reason':reason,'observation':exc.observation})
@@ -506,6 +513,7 @@ class Worker:
     def tick(self,*,execute=False,monitor=False):
         now=self.clock();self.state.refresh_policy(now);plan=self.state.day_plan(now)
         if not execute and not monitor:return self.status('preview')
+        self.state.expire_automatic_block(now)
         if execute:action_retry.RetryLedger(self.state).expire_pending(now)
         if self.state.blocked():return self.status('attention',reason=self.state.get('paused','uncertain job'))
         if not policy.in_work_window(now,self.state.config):return self.status('waiting_window')
@@ -583,8 +591,16 @@ def run_cli(args,parser):
         state.paths_provider=lambda:{n:accounts.database_for_account(n) for n in accounts.account_numbers()}
         state.refresh_policy(utcnow())
         worker=Worker(state,engine.DB_PATH,cfg,scan_settings=scan,config_path=args.config)
+        if getattr(args,'scheduler_manual_block',False):
+            applied=state.pause('manual_block',kind='manual',now=utcnow())
+            print(json.dumps({'applied':applied,'block':state.block_status()},ensure_ascii=False));return 0 if applied else 2
+        if getattr(args,'scheduler_manual_unblock',False):
+            released=state.clear_manual_block(now=utcnow())
+            print(json.dumps({'released':released,'block':state.block_status(),'resume_not_before':state.get('resume_not_before')},ensure_ascii=False))
+            return 0 if released else 2
         if args.scheduler_status:
             print(json.dumps({'heartbeat':state.get('heartbeat'),'paused':state.get('paused'),
+                'block':state.block_status(),
                 'active_uncertain':state.active_uncertain_count(),
                 'action_retry':action_retry.RetryLedger(state).summary(),
                 'isolated_posts':state.db.execute('SELECT COUNT(*) FROM scheduler_post_isolations').fetchone()[0],

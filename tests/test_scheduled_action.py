@@ -298,7 +298,7 @@ class ScheduledActionTests(unittest.TestCase):
         for stage,date,error in cases:
             with self.subTest(stage=stage),self.patches(scheduled),\
                  patch.object(groups,'exact_post_date_info',return_value=date),\
-                 patch.object(scheduled.time,'monotonic',side_effect=[0,10]),\
+                 patch.object(scheduled.time,'monotonic',side_effect=[0,10]*4),\
                  patch.object(engine,'process_one') as process,patch('time.sleep'):
                 if error:engine.go_to_post.side_effect=error
                 with self.assertRaises(scheduled.ScheduledActionStopped) as failure:
