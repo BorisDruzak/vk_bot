@@ -32,3 +32,5 @@
 5. Automatic expiry preserves the saved day and starts only from a future eligible slot, leaving independent actor safety locks and uncertainty intact.
 
 Execution ledger30Oct: local1116PASS/0skip/317.471s under -Xutf8; first non-UTF8 run1113 had one pre-existing cp1251fixture error. Final new cases and review regressions included in1116. Review legacy manual-overwrite and orphan-liveness findings fixed with RED/GREEN tests. UI desktop/mobile nooverflow/error. Private maintenance helper9Python+4PSguardsPASS. Runtime baseline088073a; publication baseline d7511d7, VMworker3592/pausedNULL at11:07. No runtime stops for checking.
+
+Ruling: automatic pause calls under an existing manual block must not overwrite its already suspended original automatic record or create a new hidden automatic block. One-line fix plus2RED/GREENcases,98focusedPASS; finaldiscovery1118. Candidate7456b56 is superseded before deployment; rerun exactSHA CI and source-onlyVM suite for the final commit.

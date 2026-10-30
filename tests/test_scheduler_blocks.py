@@ -83,6 +83,19 @@ class BlockLifecycleTests(unittest.TestCase):
         self.assertEqual(self.state.get('paused'),'OSError')
         self.assertEqual(self.state.block_status()['kind'],'automatic')
 
+    def test_failures_under_manual_switch_cannot_replace_suspended_original_block(self):
+        self.plan(self.now);self.state.pause('OSError',now=self.now)
+        self.state.pause('manual_block',kind='manual',now=self.now)
+        self.state.pause('RuntimeError',now=self.now)
+        self.assertTrue(self.state.clear_manual_block(now=self.now))
+        self.assertEqual(self.state.get('paused'),'OSError')
+
+    def test_failure_due_to_manual_guard_does_not_create_an_extra_automatic_block(self):
+        self.plan(self.now);self.state.pause('manual_block',kind='manual',now=self.now)
+        self.state.pause('RuntimeError',now=self.now)
+        self.assertTrue(self.state.clear_manual_block(now=self.now))
+        self.assertIsNone(self.state.get('paused'))
+
     def test_expiration_resets_failure_streak_without_changing_history(self):
         self.state.pause('OSError',now=self.now)
         self.state.set('action_failure_streak',3);self.state.set('technical_failures',{'read':3,'action':2})

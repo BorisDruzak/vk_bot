@@ -47,7 +47,7 @@ def pause(state,reason,*,kind='automatic',now=None):
         if kind=='manual' and existing and existing['kind']=='manual':
             return not existing.get('legacy',False) and existing['reason']=='manual_block' and str(reason)=='manual_block'
         if kind=='automatic' and existing and existing['kind']=='manual':
-            _put(state.db,'scheduler_suspended_automatic_block',record);return False
+            return False
         if kind=='manual' and existing and existing['kind']=='automatic':
             _put(state.db,'scheduler_suspended_automatic_block',state.get('scheduler_block'))
         _put(state.db,'paused',str(reason));_put(state.db,'scheduler_block',record)
