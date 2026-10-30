@@ -17,10 +17,10 @@ reuse existing actionexecutor/RetryLedger/platformguards. Legacydata immutable.
 - [x] Snapshot/timing/UI predicted-vs-actual/rest/admission/shortfall, desktop/mobile.
 - [x] Integration tests: longbatches/no overlaps, enabledaccount nextbatch,
   failed/date-skipped/uncertain quotas, crash/restart, dayrollover and budget.
-- [ ] Fresh independent review/full local suite, docs/context update, publishmain.
-- [ ] ExactSHAgreenCI + source-onlyVMfullsuite, canonicalbackup/source/config
+- [x] Fresh independent review/full local suite, docs/context update, publishmain.
+- [x] ExactSHAgreenCI + source-onlyVMfullsuite, canonicalbackup/source/config
   cutover preserving today’s history/quotas and superseding only unstartedforecast.
-- [ ] Verify installed source/policy/schema/history/rest/no-catchup and live state.
+- [x] Verify installed source/policy/schema/history/rest/no-catchup and live state.
 
 Global constraints: actor50like/10personal/20community maxima, explicittwogroups;
 attempts and intent spend oldledgers, sleep>=20, API>=5/5000rolling24h; fresh
@@ -36,3 +36,10 @@ infeasible report does not hide/reset spentquota or carry oldjobs into nextday.
 Execution ledger: plan saved before production edits. User confirmed540s after
 finish and attempted-action quotas. Live16:14sample145/390,245remaining,
 8batch_action_deadline, API3190/5000, pausedNULL. Currentruntime5229d66 untouched.
+
+Completed30Oct17:57: source911939c exactgreenLinux/Windows/analyticsCI;
+local1215/0skip/334.001s, isolatedVM1215/33Node-skip/648.118s. Three integration
+defects fixed with regressions. Naturalquiescentstop,11DB27JSON backup,
+164swapchecks/152postrestarttables unchanged,15files+4tables+narrowconfig.
+Worker3084live/waiting, gate18:04:07=actualfinish+540; firstclaimnotyetstarted.
+Forecast194spent/196remaining,8packs/first25,finish23:56; estimateonly.

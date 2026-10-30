@@ -3,9 +3,11 @@
 - [x]30октября: согласован план adaptivequeue00–24YEKT,540сек отдыха после
   завершения, лимиты попыток включая errors/uncertain; реализованы чистый расчёт,
   метрики, durableclaims/пересчёт, worker и readonlypanel, desktop/mobileQA.
-- [ ]Полный замороженный local suite/review, main/exactgreenCI и source-onlyVMsuite.
-- [ ]Каноническая установка adaptivequeue сbackup и сверкой oldhistory/quotas,
-  activeclaim/rest/no-nextdaybacklog; затем фактическая приёмка штатной пачки.
+- [x]Полный замороженный local1215/review, main911939c/exactgreenCI и source-only
+  VM1215/33Node-skip. Установлено17:56:21 сbackup11DB27JSON и сверкой history/
+  quotas/config/rest; читающаяприёмка17:57PASS, gate18:04:07 послеactualfinish+540.
+- [ ]Фактические результаты первой adaptive пачки и полного дня; прогноз196
+  оставшихся попыток/8пачек на17:58 не считать подтверждённым выполнением.
 
 - [x]28октября: четыре равные квоты50/10/20 и настроенное окно09–22,
   будущие320/80с29октября, сегодняшний09–19/60план сохранён;actor6подключён,

@@ -134,8 +134,8 @@ peak4950. Это отдельная модель без аналитическо
 Итоговый локальный набор1215тестовPASS/0skip за334.001сек; исходники во время
 финального прогона не менялись. Compile/Node syntax/diff-checkPASS. Дополнительно
 22Python и4PowerShellтеста приватного установщика прошли на syntheticstate.
-Установка этой версии пока не подтверждена; итоговые SHA/CI/VMreceipts добавляются
-после полного набора проверок и безопасного cutover.
+Установка подтверждена ниже; данные прогноза являются оценкой, не результатами
+ещё не выполненных действий.
 
 Независимое ревью обнаружило и исправило три дефекта интеграции: включение
 прежнего выключенного аккаунта внутри активной пачки; отсутствие обнаружения
@@ -145,3 +145,44 @@ peak4950. Это отдельная модель без аналитическо
 новая reservation запрещена отдельным callback. Неопределённость/защита/stop/
 daydeadline сохраняют прежнее поведение, третьей отправки нет. Граница чтения
 не сдвигается на следующий день, planningclock обновляется после API-snapshot.
+
+## Фактическая установка и приёмка30октября
+
+Установлен source SHA `911939cbe6f57d6429bd6b0d680a48d5ab47fe80`
+в17:56:21YEKT. [Linux/Windows CI](https://github.com/BorisDruzak/vk_bot/actions/runs/41053702493)
+и [OMSU CI](https://github.com/BorisDruzak/vk_bot/actions/runs/41053702302)
+завершились success для этого SHA. Все286 файлов изолированного пакета сверены
+с Git с учётом переводов строк;15runtime/web файлов установлены,36других
+модулей проверены по хешам. VM-only vk_web.py POSoverlay/favicon сохранены.
+
+Локально1215PASS/0skip/334.001сек. Изолированный source-onlyVMпрогон:
+1215тестов,0errors/0failures,33Node-onlyskip/648.118сек; эти проверки прошли
+локально, Node проверяется и вCI. Chromium проверки наВМ прошли. PythonВМ3.13.17,
+Playwright1.64.1. Тестирование не останавливало worker. Приватные22Python и
+4PowerShellустановочных guard-теста такжеPASS.
+
+Последняя legacy пачка45 завершилась17:55:07.469015; штатный stop записан
+только после quiescentexclusivelease в17:55:09.677106, без forcekill. Backup:
+11SQLite/integrityok+27JSON.164проверки protectedtables/schema послеswap и
+152таблицы послеrestart совпали; исходные plans/jobs/passes/attempts/date-skips/
+изоляции и actorhistory сохранены. TaskXML/enabledflags восстановлены точно.
+Менялись только15manifestedfiles, четыре adaptive таблицы, глобальныеmode/window/
+rest с удалениемplanned_batches и явный resume_not_before. Actorquotas/registry/
+bindings/scan/publicconfig прежние, в том числе«Собрание»50/0/20.
+
+Приёмка17:57:02: новыйPID3084/live/waiting_batch,pausedNULL/stopFalse,
+0inflight/0runningpasses/0unfinishedbatches,1440jobs прежние. HTTP `/`, `/app.js`,
+`/api/session` отвечают200, sourcehashes и narrowconfigdelta совпали. Читающая
+приёмка сделала0VKrequests/0actions. Исторические задания не переоткрывались.
+Gate18:04:07.469015 — ровно540сек после фактического завершения; старые будущие
+слоты46–66 не запускаются, динамические IDs начинаются с67.
+
+Снимок17:58:08: расход194/390, остаток196; прогноз8пачек, первая25попыток,
+старт18:04:07.469015, ожидаемый конец23:56:32.407015YEKT, shortfall0.
+Доступно1847APIreads сейчас, модель требует788 включая резерв64 дляаналитики.
+Это изменяемый прогноз; первая adaptive пачка при приёмке ещё не началась.
+Результаты полного оставшегося дня этим снимком не подтверждаются.
+
+Приватные receipts находятся наВМ в
+`C:\Users\vk-bot\vk_backups\adaptive-20261030-final` и локально в
+`outputs/adaptive-queue-2026-10-30`; живыеSQLite/профили обратно не копировались.
