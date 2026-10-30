@@ -323,7 +323,8 @@ def refresh(state,source_path,groups,settings,*,clock,transport=None,sleeper=tim
             return 'ok',payload
     if not permitted():return finish('stopped')
     candidates=_eligible(state,source_path,groups,clock())
-    if not candidates:return finish('empty')
+    adaptive=state.config.get('schedule_mode')=='adaptive'
+    if not candidates and not adaptive:return finish('empty')
     # Pending-only sources must not steer the layer for new logical actions.
     # When there are no ordinary candidates, use pending ages for the read itself.
     ordinary=[r for r in candidates.values() if r.get('ordinary_eligible')]
@@ -333,6 +334,13 @@ def refresh(state,source_path,groups,settings,*,clock,transport=None,sleeper=tim
     for key,row in candidates.items():
         if row.get('retry_pending') or policy.classify_post(row['published_at'],clock(),state.config)==band:
             wanted[key[0]].add(key[1])
+    if adaptive:
+        # Adaptive dispatch reserves a full allowlist refresh instead of idle
+        # catalog scanning. Exhausted/empty groups must still discover new posts.
+        # Empty wanted IDs read one fresh first page through the same client;
+        # known candidates retain the existing bounded pagination and guards.
+        for group in groups:
+            if group.get('enabled',True):wanted.setdefault(group['id'],set())
     report.update(band=band,requested_posts=sum(map(len,wanted.values())))
     band_floor=policy.day_bounds(clock())[0]-(state.config['old_days']*86400 if band=='old' else 0)
     band_floor=min([band_floor]+[r['published_at'] for r in candidates.values() if r.get('retry_pending')])

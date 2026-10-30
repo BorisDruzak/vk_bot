@@ -1,10 +1,11 @@
 {
   "policy": {
     "timezone": "Asia/Yekaterinburg",
-    "start_hour": 9,
-    "end_hour": 22,
+    "schedule_mode": "adaptive",
+    "start_hour": 0,
+    "end_hour": 24,
+    "batch_rest_seconds": 540,
     "batch_size": 6,
-    "planned_batches": 67,
     "old_days": 7,
     "accounts": {
       "1": {

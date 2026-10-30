@@ -269,7 +269,13 @@ def snapshot():
     if scheduler.exists():
         with closing(readonly(scheduler)) as db:
             db.row_factory=sqlite3.Row
-            state=ledger.State.__new__(ledger.State)
+            state_class=ledger.State
+            if base.get('schedule_mode')=='adaptive':
+                from vk_adaptive_state import AdaptiveState
+                state_class=AdaptiveState
+            # __init__ owns schema creation and worker recovery. A panel snapshot
+            # is strictly read-only, including before adaptive activation.
+            state=state_class.__new__(state_class)
             state.db=db;state.config=base;state.paths={k:v for k,v in paths.items() if v.exists()}
             retry=RetryLedger(state)
             state.policy_provider=lambda:accounts.effective_policy(base)
@@ -287,9 +293,21 @@ def snapshot():
                 'batches':[dict(r) for r in db.execute('SELECT * FROM scheduler_batches WHERE day=? ORDER BY slot',(str(policy.local_day(now)),))],
                 'policy_effective_day':str(day),'coverage':state.get('scan_coverage'),
                 'last_diagnostic_error':state.get('last_diagnostic_error')}
+            if base.get('schedule_mode')=='adaptive':
+                result['scheduler'].update(schedule_mode='adaptive',adaptive=state.adaptive_view(now),
+                                           policy_effective_scope='next_batch')
+                targets={}
+                if state.table(db,'scheduler_adaptive_batches'):
+                    targets={r['slot']:r['target_attempts'] for r in db.execute(
+                        'SELECT slot,target_attempts FROM scheduler_adaptive_batches WHERE day=?',
+                        (str(policy.local_day(now)),))}
+                for batch in result['scheduler']['batches']:
+                    batch['planning_mode']='adaptive' if batch['slot'] in targets else 'legacy'
+                    if batch['slot'] in targets:batch['target_attempts']=targets[batch['slot']]
             result['scheduler']['action_retry']=retry.summary()
             import vk_scheduler_timing
-            try:result['scheduler']['timing']=vk_scheduler_timing.report(db,str(policy.local_day(now)),now)
+            try:result['scheduler']['timing']=vk_scheduler_timing.report(db,str(policy.local_day(now)),now,
+                **({'schedule_mode':'adaptive','config':effective} if base.get('schedule_mode')=='adaptive' else {}))
             except Exception:result['scheduler']['timing']={'unavailable':True,'slots':[],'summary':{},'stages':{}}
             result['jobs']=[dict(r) for r in db.execute('SELECT * FROM scheduler_jobs ORDER BY id DESC LIMIT 200')]
             for job in result['jobs']:job['recovery']=retry.job_snapshot(job['id'])
@@ -305,9 +323,21 @@ def snapshot():
             'usage':used,'remaining':left,'effective_policy':effective['accounts'].get(str(number)),
             'login':login_status(number),'authentication':__import__('vk_authentication').status(number)})
     pending=accounts.effective_policy(base)
+    if base.get('schedule_mode')=='adaptive' and 'adaptive' not in result['scheduler']:
+        result['scheduler'].update(schedule_mode='adaptive',policy_effective_scope='next_batch',
+            adaptive={'day':str(policy.local_day(now)),'state':'ready',
+                      'rest_seconds':base.get('batch_rest_seconds',540),'rest_until':None,
+                      'active_batch':None,'forecast':None,'historical_cutover_at':None})
     for key,cfg in (('work_window',effective),('pending_work_window',pending)):
         result['scheduler'][key]={name:cfg[name] for name in ('start_hour','end_hour')}
     for prefix,cfg in (('',effective),('pending_',pending)):
+        if cfg.get('schedule_mode')=='adaptive':
+            forecast=result['scheduler'].get('adaptive',{}).get('forecast') or {}
+            result['scheduler'][prefix+'batch_size']=forecast.get('next_target')
+            result['scheduler'][prefix+'batch_count']=forecast.get('batch_count')
+            result['scheduler'][prefix+'batch_attempt_distribution']={str(size):count for size,count in
+                Counter(batch['target'] for batch in forecast.get('batches',[])).items()}
+            continue
         result['scheduler'][prefix+'batch_size']=cfg['batch_size']
         result['scheduler'][prefix+'batch_count']=policy.batch_count(cfg)
         distribution=Counter(policy.batch_attempt_limit(cfg,i) for i in range(policy.batch_count(cfg)))

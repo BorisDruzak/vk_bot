@@ -229,6 +229,9 @@ class Worker:
             if self.state.remaining(now).get((account,kind,target),0)<=0:return 'batch_daily_quota_reached'
         return 'batch_guard_rejected'
 
+    def attempt_limit(self,slot):
+        return policy.batch_attempt_limit(self.state.config,slot)
+
     def batch_boundary(self,slot):
         now=self.clock()
         row=self.state.db.execute('SELECT slots FROM schedule_days WHERE day=?',(str(policy.local_day(now)),)).fetchone()
@@ -378,7 +381,7 @@ class Worker:
             if wait_phase:
                 phase=wait_phase;return self.status(phase,attempted=0)
             self._timing_marks['spacing_ready_at']=self.clock()
-            attempt_limit=policy.batch_attempt_limit(self.state.config,slot)
+            attempt_limit=self.attempt_limit(slot)
             # Retain the legacy eight selections; larger batches keep a bounded
             # allowance for already/proven-unavailable candidates without spending attempts.
             for _ in range(max(8,2*attempt_limit)):
@@ -565,6 +568,15 @@ def scan_all(cfg,settings):
         return report
 
 
+def scheduler_types(config):
+    """Opt in explicitly; saved fixed plans retain the original classes."""
+    if config.get('schedule_mode')=='adaptive':
+        from vk_adaptive_state import AdaptiveState
+        from vk_adaptive_worker import AdaptiveWorker
+        return AdaptiveState,AdaptiveWorker
+    return ledger.State,Worker
+
+
 def run_cli(args,parser):
     if args.repost_community is not None or args.likes is not None or args.reposts is not None or args.test_actions:
         parser.error('Scheduler uses vk_automation.json daily quotas, not command action counts')
@@ -588,12 +600,13 @@ def run_cli(args,parser):
     for number,path in paths.items():
         if number>2 and not path.exists():
             with closing(engine.db_open(path)):pass
-    with closing(ledger.State(STATE_PATH,paths,policy_cfg)) as state:
+    state_type,worker_type=scheduler_types(policy_cfg)
+    with closing(state_type(STATE_PATH,paths,policy_cfg)) as state:
         state.policy_provider=lambda:accounts.effective_policy(policy_cfg)
         state.enabled_provider=accounts.account_enabled
         state.paths_provider=lambda:{n:accounts.database_for_account(n) for n in accounts.account_numbers()}
         state.refresh_policy(utcnow())
-        worker=Worker(state,engine.DB_PATH,cfg,scan_settings=scan,config_path=args.config)
+        worker=worker_type(state,engine.DB_PATH,cfg,scan_settings=scan,config_path=args.config)
         if getattr(args,'scheduler_manual_block',False):
             applied=state.pause('manual_block',kind='manual',now=utcnow())
             print(json.dumps({'applied':applied,'block':state.block_status()},ensure_ascii=False));return 0 if applied else 2
@@ -618,10 +631,14 @@ def run_cli(args,parser):
         if args.scheduler_stop:
             state.set('stop_requested',True);print('[SCHEDULER] Stop requested; no new jobs');return 0
         if args.schedule_preview:
-            now=utcnow();plan=state.day_plan(now)
+            now=utcnow();adaptive={}
+            if state.config.get('schedule_mode')=='adaptive':
+                state.ensure_day(now);state.update_forecast(now,reason='preview')
+                adaptive={'adaptive':state.adaptive_view(now)}
+            plan=state.day_plan(now)
             print(json.dumps({'policy':state.config,'slots':[t.astimezone(policy.LOCAL_TZ).isoformat() for t in plan],
                 'remaining':{f'{a}:{k}:{c}':n for (a,k,c),n in state.remaining(now).items()},
-                'queue':worker.queue_snapshot()},ensure_ascii=False,indent=2));return 0
+                'queue':worker.queue_snapshot(),**adaptive},ensure_ascii=False,indent=2));return 0
         if args.scheduler_check:
             import vk_scheduler_probe as probe
             with closing(engine.db_open(engine.DB_PATH)) as source:

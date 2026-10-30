@@ -36,8 +36,9 @@ def _quiet(state,now):
         or state.db.execute("SELECT 1 FROM scheduler_action_recovery WHERE state='running'").fetchone()
         # Old empty orphan batches are historical evidence, not current work.
         # In-flight jobs/running passes above still block across all days.
-        or state.db.execute('SELECT 1 FROM scheduler_batches WHERE finished_at IS NULL AND day>=?',
-                            (str(policy.local_day(now)),)).fetchone())
+        or (state.active_row(now) if callable(getattr(state,'active_row',None)) else
+            state.db.execute('SELECT 1 FROM scheduler_batches WHERE finished_at IS NULL AND day>=?',
+                             (str(policy.local_day(now)),)).fetchone()))
 
 
 def pause(state,reason,*,kind='automatic',now=None):
@@ -82,8 +83,9 @@ def expire(state,now):
         existing=state.get('resume_not_before',0)
         future=[(i,s) for i,s in enumerate(slots) if s>now+timedelta(seconds=60) and s.timestamp()>=existing
                 and not state.db.execute('SELECT 1 FROM scheduler_batches WHERE day=? AND slot=?',(day,i)).fetchone()]
-        if not future:return False
-        slot,gate=future[0]
+        candidate=state.resume_candidate(now) if callable(getattr(state,'resume_candidate',None)) else None
+        if not future and candidate is None:return False
+        slot,gate=candidate if candidate is not None else future[0]
         _put(state.db,'last_scheduler_block_release',{'kind':'automatic','reason':block['reason'],'blocked_day':block['day'],
             'at':now.isoformat(),'day':day,'slot':slot,'resume_at':gate.isoformat(),'block_record':state.get('scheduler_block')})
         _put(state.db,'resume_not_before',gate.timestamp());_put(state.db,'paused',None);_put(state.db,'scheduler_block',None)
@@ -104,11 +106,12 @@ def clear_manual(state,*,now=None):
         slots=[datetime.fromisoformat(s) for s in json.loads(plan[0])]
         future=[s for i,s in enumerate(slots) if s>now+timedelta(seconds=60) and s.timestamp()>=state.get('resume_not_before',0)
                 and not state.db.execute('SELECT 1 FROM scheduler_batches WHERE day=? AND slot=?',(day,i)).fetchone()]
-        if not future:return False
+        candidate=state.resume_candidate(now) if callable(getattr(state,'resume_candidate',None)) else None
+        if not future and candidate is None:return False
         pending=state.get('scheduler_suspended_automatic_block')
         if pending is not None and (not isinstance(pending,dict) or not _valid_record(pending,pending.get('reason')) or pending['kind']!='automatic'):return False
         _put(state.db,'last_scheduler_block_release',{'kind':'manual','reason':'manual_block','at':now.isoformat()})
-        _put(state.db,'resume_not_before',future[0].timestamp())
+        _put(state.db,'resume_not_before',(candidate[1] if candidate is not None else future[0]).timestamp())
         _put(state.db,'paused',pending['reason'] if isinstance(pending,dict) else None)
         _put(state.db,'scheduler_block',pending);_put(state.db,'scheduler_suspended_automatic_block',None)
     return True

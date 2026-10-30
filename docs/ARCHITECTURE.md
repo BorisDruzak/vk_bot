@@ -1,5 +1,19 @@
 # Архитектура VK Unified (v6.34)
 
+Адаптивный режим schedule_mode=adaptive: vk_adaptive_planner — чистая оценка
+времени/rollingAPI/остатков; vk_adaptive_metrics — readonly p95 законченных passes
+с запасом; vk_adaptive_state — activation/forecast revisions/immutableclaims и
+recoveryqualifications в четырёх новых таблицах. Общие jobs/attemptledgers не
+мигрируются. AdaptiveWorker переиспользует прежний executor/guards/RetryLedger,
+исключительную lease всей пачки и finalclick-проверки. Единственная граница
+пачки — полночь своего дня с120сек запасом; прогноз не прерывает выполнение.
+Следующая claim разрешена только после фактического finished_at+540, включая
+перезапуск и смену дня. Claim фиксирует target/config/enabled_accounts, поэтому
+новое включение ждёт следующую пачку, а disable проверяется сразу. Фонового
+обхода между пачками нет; свежие prebatch-чтения открывают новые посты и счётчики
+через прежний общий VKReadClient. Snapshot/timing строго readonly, прогноз и
+фактическая история разделены. Полный контракт: ADAPTIVE_QUEUE_2026_10_30.md.
+
 30октября: SourceDateUnavailable после initial+3 bounded date-reading
 windows получает отдельную exact receipt scheduler_date_skips: без pause,
 без повторной отправки, со spentquota/intent/uncertain и actor/day exclusion.

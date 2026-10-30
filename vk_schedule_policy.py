@@ -57,16 +57,22 @@ def validate_config(config=None) -> dict:
     """
     cfg=deepcopy(DEFAULT_CONFIG)
     if config is None:return cfg
-    if not isinstance(config,dict) or set(config)-(set(cfg)|{'planned_batches'}):
+    if not isinstance(config,dict) or set(config)-(set(cfg)|{'planned_batches','schedule_mode','batch_rest_seconds'}):
         raise ValueError('Unknown or malformed schedule policy')
     for key,value in config.items():
         if key!='accounts':cfg[key]=deepcopy(value)
     if cfg['timezone']!='Asia/Yekaterinburg':
         raise ValueError('Schedule timezone must be Asia/Yekaterinburg')
-    if not (_integer(cfg['start_hour'],9,18) and
-            _integer(cfg['end_hour'],10,22) and cfg['start_hour']<cfg['end_hour']):
-        raise ValueError('Schedule window must stay within09:00–22:00')
-    if not _integer(cfg['batch_size'],1,6) or not _integer(cfg['old_days'],0,7):
+    adaptive=cfg.get('schedule_mode')=='adaptive'
+    if cfg.get('schedule_mode','fixed') not in ('fixed','adaptive'):raise ValueError('Unknown schedule mode')
+    if adaptive:
+        cfg.setdefault('batch_rest_seconds',540)
+        if not _integer(cfg['batch_rest_seconds'],540,86400):raise ValueError('Rest after batch must be at least540seconds')
+    elif 'batch_rest_seconds' in cfg:raise ValueError('Post-finish rest belongs to adaptive policy')
+    if not (_integer(cfg['start_hour'],0 if adaptive else 9,23 if adaptive else 18) and
+            _integer(cfg['end_hour'],1 if adaptive else 10,24 if adaptive else 22) and cfg['start_hour']<cfg['end_hour']):
+        raise ValueError('Invalid calendar-day work window' if adaptive else 'Schedule window must stay within09:00–22:00')
+    if not _integer(cfg['batch_size'],1,4320 if adaptive else 6) or not _integer(cfg['old_days'],0,7):
         raise ValueError('Invalid batch size or reserve post age')
     accounts=config.get('accounts',{})
     if not isinstance(accounts,dict) or any(not isinstance(k,str) or not k.isascii() or
@@ -79,6 +85,10 @@ def validate_config(config=None) -> dict:
             raise ValueError('Unknown account policy field')
         cfg['accounts'][number].update(deepcopy(override))
     for account in cfg['accounts'].values():validate_account_policy(account)
+    if adaptive:
+        # A legacy planned count never authorizes or limits adaptive dispatch.
+        cfg.pop('planned_batches',None)
+        return cfg
     total=sum(sum(a[key] for key in ('likes','personal_reposts','community_reposts'))
               for a in cfg['accounts'].values())
     window=(cfg['end_hour']-cfg['start_hour'])*3600
@@ -115,7 +125,8 @@ def day_bounds(now:datetime) -> tuple[int,int]:
 
 def _work_bounds(day:date,cfg:dict) -> tuple[datetime,datetime]:
     return (datetime.combine(day,time(cfg['start_hour']),LOCAL_TZ).astimezone(UTC),
-            datetime.combine(day,time(cfg['end_hour']),LOCAL_TZ).astimezone(UTC))
+            (datetime.combine(day+timedelta(days=1),time(),LOCAL_TZ) if cfg['end_hour']==24
+             else datetime.combine(day,time(cfg['end_hour']),LOCAL_TZ)).astimezone(UTC))
 
 
 def work_bounds(now:datetime,config=None) -> tuple[datetime,datetime]:

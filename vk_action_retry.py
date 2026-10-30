@@ -357,6 +357,7 @@ def execute_job(worker,job,row,slot,capacity):
     import vk_scheduler as scheduler
     import vk_scheduled_action as actions
     state=worker.state;book=RetryLedger(state);attempted=0
+    adaptive=state.config.get('schedule_mode')=='adaptive'
     if book.row(job):book.begin_retry(job,worker.clock())
     else:book.begin(job,worker.clock())
     while True:
@@ -370,13 +371,18 @@ def execute_job(worker,job,row,slot,capacity):
             nonlocal attempted
             book.record_attempt(job,aid);attempted+=1
             worker.observe_timing_event('attempt_reserved',job,attempt_id=aid)
+        def before_attempt():
+            if adaptive and attempted>=capacity:
+                raise RuntimeError('Adaptive batch attempt target reached')
+            return book.before_attempt(job,worker.clock(),slot)
         try:
             log('action_started')
             options={}
             if r['passes']==2 and j['attempt_id'] is not None:options={'recovery_attempt_id':j['attempt_id'],
-                'allow_retry_click':state.remaining(worker.clock()).get((j['account'],j['kind'],j['community_id']),0)>0}
+                'allow_retry_click':(not adaptive or attempted<capacity) and
+                    state.remaining(worker.clock()).get((j['account'],j['kind'],j['community_id']),0)>0}
             result=actions.execute_action(j['account'],j['kind'],{**row,'community_id':j['community_id']},
-                before_attempt=lambda:book.before_attempt(job,worker.clock(),slot),record_attempt=record,
+                before_attempt=before_attempt,record_attempt=record,
                 identity_read_deadline=worker.identity_read_deadline(slot),
                 before_identity_read=lambda:book.before_identity_read(job,worker.clock()),
                 before_click=lambda:state.click_timeout(job,worker.clock()),config_path=worker.config_path,diagnostic=log,**options)
@@ -447,8 +453,11 @@ def execute_job(worker,job,row,slot,capacity):
             if r['passes']==2:
                 book.hold(job,worker.clock())
                 return {'attempted':attempted,'phase':'attention' if state.get('paused') else None,'skipped':0}
-            # Keep the one remaining pass durable when the batch is full.
-            if attempted>=capacity:return {'attempted':attempted,'phase':None,'skipped':0}
+            # An adaptive batch may finish its existing attempt's confirmation
+            # without another reservation. The callback and allow_retry_click
+            # independently prohibit spending beyond the durable target.
+            if attempted>=capacity and not (adaptive and current['attempt_id'] is not None):
+                return {'attempted':attempted,'phase':None,'skipped':0}
             if state.action_time_closed(worker.clock()):
                 return {'attempted':attempted,'phase':'batch_action_deadline','skipped':0}
             if state.get('stop_requested',False) or not policy.in_work_window(worker.clock(),state.config):

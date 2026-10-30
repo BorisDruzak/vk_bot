@@ -14,6 +14,7 @@ function workWindowLabel(window) {
   return `${String(window.start_hour).padStart(2,'0')}:00–${String(window.end_hour).padStart(2,'0')}:00 YEKT`;
 }
 function scheduleWindowText(scheduler) {
+  if (scheduler?.schedule_mode === 'adaptive') return '00:00–24:00 YEKT';
   const current=workWindowLabel(scheduler?.work_window);
   const pending=workWindowLabel(scheduler?.pending_work_window);
   if (!current) return 'Рабочее окно уточняется';
@@ -24,6 +25,10 @@ function scheduleWindowText(scheduler) {
 // END schedule window helpers
 // BEGIN schedule batch helpers
 function scheduleBatchText(scheduler) {
+  if (scheduler?.schedule_mode === 'adaptive') {
+    const forecast=scheduler.adaptive?.forecast||{};
+    return `Размер и число пачек — автоматически · следующая цель: ${value(forecast.next_target)} попыток · осталось пачек по прогнозу: ${value(forecast.batch_count)} · отдых 9 мин после полного завершения каждой пачки`;
+  }
   const label=(size,count,distribution)=>{
     if(!Number.isInteger(size)||size<1||size>6||!Number.isInteger(count)||count<1)return null;
     const entries=distribution&&typeof distribution==='object'&&!Array.isArray(distribution)?Object.entries(distribution):[];
@@ -39,6 +44,46 @@ function scheduleBatchText(scheduler) {
     ? ` · с ${scheduler.policy_effective_day||'первого нового дня'}: ${pending}` : '');
 }
 // END schedule batch helpers
+function adaptiveMode(){return snapshot?.scheduler?.schedule_mode==='adaptive';}
+function adaptiveDuration(seconds){
+  if(typeof seconds!=='number'||!Number.isFinite(seconds))return '—';
+  const whole=Math.ceil(Math.max(0,seconds));return `${Math.floor(whole/60)} мин ${String(whole%60).padStart(2,'0')} с`;
+}
+function adaptiveReason(reason){
+  const known={fits:'достаточно времени и API по расчёту',complete:'дневной остаток исчерпан',quota_complete:'дневной остаток исчерпан',
+    day_complete:'дневной остаток исчерпан',empty:'дневной остаток исчерпан',time:'не хватает времени до полуночи',time_budget:'не хватает времени до полуночи',
+    insufficient_time:'не хватает времени до полуночи',day_deadline:'полночь YEKT, граница суток',
+    api:'не хватает бюджета API',api_budget:'не хватает бюджета API',insufficient_api:'не хватает бюджета API',
+    api_budget_and_time:'не хватает API и времени до полуночи',insufficient_time_or_api_budget:'ограничение времени до полуночи и/или rolling-бюджета API',waiting_api:'ожидание освобождения rolling-бюджета API'};
+  return known[reason]||reason||'причина уточняется';
+}
+function renderAdaptive(){
+  const panel=$('adaptive-queue');if(!panel)return;
+  panel.hidden=!adaptiveMode();if(!adaptiveMode())return;
+  const adaptive=snapshot.scheduler.adaptive||{},forecast=adaptive.forecast||{},active=adaptive.active_batch;
+  const states={working:'Активная пачка',resting:'Отдых после фактического завершения пачки',ready:'Очередь готова к следующей пачке',
+    day_complete:'Дневная очередь завершена',infeasible:'Весь остаток не помещается в сутки',waiting_api:'Ожидание API'};
+  let state=states[adaptive.state]||'Состояние очереди уточняется';
+  if(active)state+=` · цель активной пачки зафиксирована: ${value(active.target_attempts)} попыток · начало ${date(active.started_at,true)} YEKT · оценка завершения ${date(active.estimated_end,true)} YEKT. Граница новых действий — полночь YEKT; прогноз следующей пачки её не сокращает.`;
+  if(adaptive.rest_until){
+    const until=Date.parse(adaptive.rest_until),now=Date.now();
+    state+=` · отдых до ${date(adaptive.rest_until,true)} YEKT`;
+    if(Number.isFinite(until))state+=until>now?` · осталось ${adaptiveDuration(Math.ceil((until-now)/1000))}`:' · срок отдыха истёк; ожидается свежий статус worker';
+  }
+  $('adaptive-state').textContent=state;
+  const feasible=forecast.feasible===true?'Весь остаток помещается по расчёту':forecast.feasible===false?'Весь остаток не помещается по расчёту':'Вместимость уточняется';
+  const forecastNode=$('adaptive-forecast');forecastNode.replaceChildren();
+  for(const line of [
+    `Следующие пачки — изменяемый прогноз. Остаток квот: ${value(forecast.remaining_attempts)} попыток · запланировано: ${value(forecast.planned_attempts)} · Недобор: ${value(forecast.shortfall)}. ${feasible}: ${adaptiveReason(forecast.reason)}.`,
+    `Следующая цель: ${value(forecast.next_target)}, старт ${date(forecast.next_start,true)} YEKT · пачек: ${value(forecast.batch_count)} · завершение ${date(forecast.completion_at,true)} YEKT.`,
+    `По времени: требуется ${adaptiveDuration(forecast.projected_seconds)}, доступно ${adaptiveDuration(forecast.available_seconds)}. API: требуется по прогнозу ${value(forecast.api_required)}, доступно сейчас ${value(forecast.api_available)} · максимально помещается ${value(forecast.maximum_attempts_fit)} попыток.`,
+    'Все попытки, включая ошибки и uncertain, расходуют квоты. Прогноз не гарантирует verified; остаток на завтра не переносится.'
+  ])forecastNode.append(text('p',line));
+  const assumptions=forecast.assumptions;
+  const details=typeof assumptions==='string'?assumptions:assumptions&&typeof assumptions==='object'?
+    `средняя полная попытка ${adaptiveDuration(assumptions.weighted_action_seconds)}, подготовка пачки ${adaptiveDuration(assumptions.refresh_seconds)} / ${value(assumptions.refresh_requests)} запросов; резерв чтения ${value(assumptions.reserved_reads)}, проверок аккаунта на попытку ${value(assumptions.identity_reads_per_attempt)}. Учтено освобождение API через 24 часа; защитные проверки обязательны`:'измерения ещё не получены';
+  $('adaptive-assumptions').textContent=`Версия прогноза: ${value(forecast.revision)} · рассчитан ${date(forecast.generated_at,true)} YEKT. Допущения и запас: ${details}. Аккаунты и остатки пересчитываются перед следующей пачкой. Отдых — 540 секунд после подтверждения, обязательной паузы и безопасного завершения предыдущей пачки.`;
+}
 // BEGIN heartbeat helpers
 function workerHeartbeat(input, now = Date.now()) {
   const heartbeat = input && typeof input === 'object' ? input : {at: input};
@@ -65,6 +110,8 @@ function workerHeartbeat(input, now = Date.now()) {
     batch_spacing_wait: 'Ожидание минимального интервала между пачками',
     batch_window_or_budget_closed: 'Пачка завершена досрочно: старый код не различал причину',
     batch_action_deadline: 'Достигнута граница действий: оставлена минута до следующей пачки',
+    day_deadline: 'Достигнута полночь YEKT, граница суток',
+    batch_day_deadline: 'Достигнута полночь YEKT, граница суток',
     batch_work_window_closed: 'Закрыто настроенное рабочее окно',
     batch_daily_quota_reached: 'Достигнута дневная квота действий',
     batch_stop_requested: 'Запрошена остановка worker',
@@ -244,6 +291,7 @@ function timelineState(slot, batch, now, heartbeat={}, wallNow=now) {
     reserve_counter_refresh_stopped:'обновление резерва остановлено',reserve_waiting_profile_lock:'профиль занят при обновлении резерва',
     reserve_counter_refresh_deadline:'оставлено время для следующей пачки',
     technical_error_deferred:'техническая ошибка до отправки'};
+  if(batch.planning_mode==='adaptive'&&['day_deadline','batch_day_deadline'].includes(code))return {css:'partial',label:'Завершено досрочно: полночь YEKT, граница суток; результаты — в заданиях'};
   if (batch.finished_at && early[code])return {css:'partial',label:`Завершено досрочно: ${early[code]}; результаты — в заданиях`};
   return {css:'uncertain',label:`Требует проверки: ${code||'неизвестный результат'}`};
 }
@@ -251,6 +299,26 @@ function timelineState(slot, batch, now, heartbeat={}, wallNow=now) {
 function renderTimeline(){
   const timeline=$('timeline');timeline.replaceChildren();
   const schedule=snapshot?.scheduler||{},slots=schedule.slots||[],batches=schedule.batches||[];
+  if(schedule.schedule_mode==='adaptive'){
+    const history=text('div','','adaptive-timeline-group');history.append(text('strong','Фактические пачки'));
+    const marks=text('div','','slots');
+    for(const batch of batches){
+      const at=batch.started_at||(typeof batch.slot==='string'?batch.slot:slots[batch.slot]);
+      const state=timelineState(at,batch,Date.parse(snapshot.now),schedule.heartbeat||{},Date.now());
+      const mark=text('span','','slot '+state.css);
+      mark.title=`${date(at,true)} YEKT · ${batch.planning_mode==='adaptive'?'Адаптивная пачка':'История прежнего плана'} · ${state.label}${batch.target_attempts!==undefined?` · цель ${batch.target_attempts}`:''}${batch.finished_at?` · завершена ${date(batch.finished_at,true)} YEKT`:''}`;
+      mark.setAttribute('aria-label',mark.title);marks.append(mark);
+    }
+    history.append(marks);if(!batches.length)history.append(text('p','Фактических пачек пока нет','muted'));timeline.append(history);
+    const future=text('div','','adaptive-timeline-group');future.append(text('strong','Изменяемый прогноз следующих пачек'));
+    const planned=text('div','','slots');
+    for(const batch of schedule.adaptive?.forecast?.batches||[]){
+      const mark=text('span','','slot forecast');
+      mark.title=`Прогноз · ${date(batch.start,true)}–${date(batch.end,true)} YEKT · цель ${value(batch.target)} попыток · пересчитывается перед запуском`;
+      mark.setAttribute('aria-label',mark.title);planned.append(mark);
+    }
+    future.append(planned);timeline.append(future);return;
+  }
   if(!slots.length&&!batches.length){timeline.append(text('p','Сохранённых интервалов пока нет','muted'));return;}
   const all=[...new Set([...slots,...batches.filter(b=>typeof b.slot==='string').map(b=>b.slot)])].sort();
   const grouped=new Map();
@@ -273,7 +341,7 @@ function timingReason(row){
   const names={late_claim:'поздний захват слота',spacing_wait:'ожидание интервала 540 с',
     counter_refresh_deadline:'истёк срок чтения счётчиков',action_deadline:'истёк срок нового intent',
     no_candidate:'нет подходящего кандидата',platform_block:'защита VK',guard_block:'защитная остановка',
-    quota:'дневная квота',stop_requested:'запрошена остановка',day_changed:'сменился день YEKT'};
+    quota:'дневная квота',stop_requested:'запрошена остановка',day_changed:'сменился день YEKT',day_deadline:'полночь YEKT, граница суток'};
   const reasons=(row.causes||[]).map(c=>names[c]).filter(Boolean);
   const next=row.next_not_started_before_intent===true&&Number.isInteger(row.attempts)&&
     Number.isInteger(row.batch_capacity)&&row.attempts>0&&row.attempts<row.batch_capacity&&row.batch_capacity<=6
@@ -287,12 +355,16 @@ function timingReason(row){
 // END timing helpers
 function renderTiming(){
   const report=snapshot?.scheduler?.timing,summary=report?.summary||{};
+  const adaptive=snapshot?.scheduler?.schedule_mode==='adaptive';
+  const rows=adaptive?(report?.slots||[]).filter(row=>(snapshot.scheduler.batches||[]).some(batch=>
+    (batch.slot!==undefined&&(batch.slot===row.slot||batch.slot===row.slot_index))||(batch.started_at&&batch.started_at===row.claimed_at))):(report?.slots||[]);
   if(!$('timing-summary'))return;
   $('timing-summary').textContent=report?.slots?.length?
     `Теоретическая вместимость, мест для попыток: ${value(summary.theoretical_attempts)}. По плану: ${value(summary.planned_attempt_capacity)} мест для попыток. Дневная квота: ${value(summary.daily_quota)} попыток. Зарегистрировано: ${value(summary.attempts)}; verified: ${value(summary.verified)}. Пустых завершённых пачек: ${value(summary.empty)}; неполных: ${value(summary.partial)}; незахваченных слотов после срока: ${value(summary.missed)}.`:
     report?.unavailable?'Диагностика времени недоступна; основные результаты показаны отдельно.':'Сохранённого плана для отчёта пока нет.';
   $('timing-coverage').textContent='Вместимость не гарантирует подтверждения. Прочерк — нет измерения. Исторические попытки без телеметрии показаны по заданиям; переносимые повторы могут ограничивать точность привязки к слоту.'+(report?.diagnostics_truncated?' Выборка измерений ограничена.':'');
-  table('timing-slots',['Слот и границы YEKT','Фактические отметки YEKT','Сроки YEKT','Окно intent','Попытки / мест · verified','Причина'],(report?.slots||[]).map(r=>{
+  if(adaptive)$('timing-summary').textContent='Диагностика фактических пачек. Границы прежних слотов относятся к историческому плану; будущий прогноз показан отдельно и не считается пропуском.';
+  table('timing-slots',['Слот и границы YEKT','Фактические отметки YEKT','Сроки YEKT','Окно intent','Попытки / мест · verified','Причина'],rows.map(r=>{
     const marks=text('div','','timing-marks');
     for(const [label,key]of [['Захват','claimed_at'],['Счётчики','refresh_finished_at'],['Интервал готов','spacing_ready_at'],['Первый intent','first_action_at']])marks.append(text('div',`${label}: ${date(r[key],true)}`));
     const bounds=text('div','','timing-marks'),limits=text('div','','timing-marks');
@@ -390,6 +462,7 @@ function renderAccounts() {
   $('account-flow-hint').textContent = flexible
     ? 'Добавьте аккаунт, войдите в окне VM; профиль сохранится автоматически. Автоматика включается отдельно в настройках.'
     : 'Отключение действует сразу. Квоты и назначения — с первого ещё не запланированного дня.';
+  if(adaptiveMode())$('account-flow-hint').textContent+=' Новые квоты, назначения и включённые после свежей проверки аккаунты учитываются со следующей пачки. Отключение действует сразу; расход квот сохраняется.';
   list.replaceChildren();
   for (const account of snapshot?.accounts || []) {
     const auth = accountAuthentication(account);
@@ -413,7 +486,7 @@ function renderAccounts() {
     row.append(text('p', `Лайки ${value(usage.like)} / ${value(policy.likes)}, осталось ${value(remaining.like)} · Личные ${value(usage.personal)} / ${value(policy.personal_reposts)}, осталось ${value(remaining.personal)} · Сообщества ${value(usage.community)} / ${value(policy.community_reposts)}, осталось ${value(remaining.community)}. Назначения: ${(policy.communities || []).join(', ') || 'не заданы'}`, 'account-policy'));
     if (account.effective_policy && JSON.stringify(account.effective_policy) !== JSON.stringify(account.policy)) {
       const future = account.policy || {};
-      row.append(text('p', `Будущие квоты: лайки ${value(future.likes)}, личные ${value(future.personal_reposts)}, сообщества ${value(future.community_reposts)} · назначения ${(future.communities || []).join(', ') || 'не заданы'}`, 'muted'));
+      row.append(text('p', `${adaptiveMode()?'Со следующей пачки':'Будущие квоты'}: лайки ${value(future.likes)}, личные ${value(future.personal_reposts)}, сообщества ${value(future.community_reposts)} · назначения ${(future.communities || []).join(', ') || 'не заданы'}`, 'muted'));
     }
     const actions = text('div', '', 'account-actions');
     actions.append(
@@ -504,10 +577,11 @@ function schedulerBlockText(s) {
     ? `Автоматический блок: ${reason}. До следующего запланированного дня. `
     : `Ручной блок: ${reason}. Снимается вручную. `;
 }
-function render(){const s=snapshot.scheduler||{};const windowNode=$('work-window');if(windowNode)windowNode.textContent=scheduleWindowText(s);const batchNode=$('batch-policy');if(batchNode)batchNode.textContent=scheduleBatchText(s);$('execution-host').textContent=`Исполнение: ${snapshot.execution_host||'Windows VM'}`;renderWorkerState();$('safety-state').textContent=`${schedulerBlockText(s)}Активных uncertain: ${value(s.active_uncertain)} · Изолировано постов: ${value(s.isolated_posts)}${actionRetrySummary(s.action_retry)}`;$('policy-day').textContent=`Лимиты — ${s.policy_effective_day||'с первого не запланированного дня'}`;const selected=$('job-account').value;$('job-account').replaceChildren(new Option('Все',''));for(const a of snapshot.accounts||[])$('job-account').add(new Option(`${a.name} · №${a.account}`,a.account));$('job-account').value=selected;fillGroupFilters();renderJobs();renderTimeline();renderTiming();renderAccounts();if(!$('post-group').value)renderPosts(snapshot.posts||[]);else if(loadedGroupPosts.id===$('post-group').value)renderPosts(loadedGroupPosts.posts);else renderPosts([]);renderGroups();$('updated').textContent=`Обновлено ${new Date().toLocaleTimeString('ru-RU')}`;}
+function render(){const s=snapshot.scheduler||{};const windowNode=$('work-window');if(windowNode)windowNode.textContent=scheduleWindowText(s);const batchNode=$('batch-policy');if(batchNode)batchNode.textContent=scheduleBatchText(s);$('execution-host').textContent=`Исполнение: ${snapshot.execution_host||'Windows VM'}`;renderWorkerState();$('safety-state').textContent=`${schedulerBlockText(s)}Активных uncertain: ${value(s.active_uncertain)} · Изолировано постов: ${value(s.isolated_posts)}${actionRetrySummary(s.action_retry)}`;$('policy-day').textContent=adaptiveMode()?'Квоты и аккаунты — со следующей пачки':`Лимиты — ${s.policy_effective_day||'с первого не запланированного дня'}`;renderAdaptive();const selected=$('job-account').value;$('job-account').replaceChildren(new Option('Все',''));for(const a of snapshot.accounts||[])$('job-account').add(new Option(`${a.name} · №${a.account}`,a.account));$('job-account').value=selected;fillGroupFilters();renderJobs();renderTimeline();renderTiming();renderAccounts();if(!$('post-group').value)renderPosts(snapshot.posts||[]);else if(loadedGroupPosts.id===$('post-group').value)renderPosts(loadedGroupPosts.posts);else renderPosts([]);renderGroups();$('updated').textContent=`Обновлено ${new Date().toLocaleTimeString('ru-RU')}`;}
 async function refresh(){const result=await rpc('snapshot');snapshot=result;$('error').hidden=true;render();}
 function editAccount(account){
   const flexible=flexibleAccountFlow();
+  const hint=$('account-policy-hint');if(hint)hint.textContent=adaptiveMode()?'Новые квоты и сообщества учитываются со следующей пачки. Активная пачка сохраняет свою цель. Отключение — сразу; включение требует свежей проверки входа. Расход квот не обнуляется.':'Новые квоты и сообщества применятся с первого ещё не запланированного дня YEKT, не раньше завтра. Отключение — сразу; включение требует проверки backend.';
   $('account-id').value=account?.account||'';
   $('dialog-title').textContent=account?'Настройки аккаунта':'Добавить аккаунт';
   $('name-label').hidden=!!account&&!flexible;
@@ -561,7 +635,7 @@ $('account-form').onsubmit = async event => {
         personal_reposts:Number($('personal-reposts').value),
         community_reposts:Number($('community-reposts').value), communities:groups
       });
-      note = 'Настройки сохранены. Новые квоты и назначения — с первого ещё не запланированного дня, не раньше завтра; отключение — сразу.';
+      note = adaptiveMode()?'Настройки сохранены. Квоты, назначения и включённые аккаунты учитываются со следующей пачки; отключение — сразу. Уже потраченные попытки сохраняются.':'Настройки сохранены. Новые квоты и назначения — с первого ещё не запланированного дня, не раньше завтра; отключение — сразу.';
     } else {
       const created = await createAccountAndLogin($('account-name').value.trim()||(flexibleAccountFlow()?'Новый аккаунт':''));
       note = flexibleAccountFlow() ? (created.loginStarted
@@ -594,4 +668,4 @@ setInterval(async()=>{if(csrf&&!busy&&!$('account-dialog').open){try{await refre
 setInterval(pollLoginStatuses, 3000);
 
 // Refresh only time-sensitive cached status; never reset forms or fetch data.
-setInterval(()=>{if(csrf&&snapshot){renderWorkerState();renderTimeline();}},30000);
+setInterval(()=>{if(csrf&&snapshot){renderWorkerState();renderTimeline();renderAdaptive();}},30000);

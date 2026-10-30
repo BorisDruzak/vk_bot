@@ -13,7 +13,7 @@ TIMES={'S','N','E','B','Dread','Dintent','click_deadline','claimed_at',
 NUMBERS={'claim_delay_seconds','spacing_wait_seconds','intent_seconds_available',
          'remaining_before_intent_seconds','next_slot_delay_seconds'}
 CAUSES={'late_claim','spacing_wait','counter_refresh_deadline','action_deadline',
-        'no_candidate','platform_block','guard_block','quota','stop_requested','day_changed'}
+        'no_candidate','platform_block','guard_block','quota','stop_requested','day_changed','day_deadline'}
 
 
 def moment(value):
@@ -60,6 +60,7 @@ def effective_window(S,N,E,*,observations=None,now,phase=None,reason=None):
     if phase=='batch_daily_quota_reached':causes.append('quota')
     if phase=='batch_stop_requested':causes.append('stop_requested')
     if phase=='batch_day_changed':causes.append('day_changed')
+    if phase in ('day_deadline','batch_day_deadline'):causes.append('day_deadline')
     if phase=='attention':causes.append('platform_block' if reason in ('PlatformRateLimited','VkApiLimited','VkApiProtection') else 'guard_block')
     values={'S':S,'N':N,'E':E,'B':B,'Dread':read,'Dintent':intent,'click_deadline':click,**marks,
             'claim_delay_seconds':delay,'spacing_wait_seconds':wait,
@@ -77,14 +78,26 @@ def _rows(db,sql,args=()):
     return [dict(zip(names,row)) for row in cursor]
 
 
-def report(db,day,now):
+def report(db,day,now,*,schedule_mode=None,config=None):
     """Accept an existing *read-only* connection. No State init/migrations/writes."""
     saved=_rows(db,'SELECT config,slots FROM schedule_days WHERE day=?',(str(day),))
-    if not saved:return {'day':str(day),'slots':[],'summary':{},'stages':{}}
-    cfg=json.loads(saved[0]['config']);slots=json.loads(saved[0]['slots'])
+    tables={r['name'] for r in _rows(db,"SELECT name FROM sqlite_master WHERE type='table'")}
+    activation=(_rows(db,'SELECT day FROM scheduler_adaptive_days WHERE day=?',(str(day),))
+                if 'scheduler_adaptive_days' in tables else [])
+    adaptive=schedule_mode=='adaptive' or bool(activation)
+    if not saved and not adaptive:return {'day':str(day),'slots':[],'summary':{},'stages':{}}
+    cfg=json.loads(saved[0]['config']) if saved else {'end_hour':24,'batch_size':0,'accounts':{}}
+    slots=json.loads(saved[0]['slots']) if saved else []
+    targets=({r['slot']:r for r in _rows(db,'SELECT * FROM scheduler_adaptive_batches WHERE day=?',(str(day),))}
+             if adaptive and 'scheduler_adaptive_batches' in tables else {})
+    if not saved:
+        cached=(_rows(db,'SELECT config FROM scheduler_adaptive_forecasts WHERE day=? ORDER BY id DESC LIMIT 1',
+                      (str(day),)) if 'scheduler_adaptive_forecasts' in tables else [])
+        cfg=(config or (json.loads(cached[0]['config']) if cached else
+             policy.validate_config({'schedule_mode':'adaptive','start_hour':0,'end_hour':24})))
     maximum_capacity=cfg.get('batch_size',4)
     day_start=datetime.fromisoformat(str(day)).replace(tzinfo=policy.LOCAL_TZ)
-    E=day_start.replace(hour=cfg.get('end_hour',19))
+    E=day_start+timedelta(hours=cfg.get('end_hour',19))
     batches={r['slot']:r for r in _rows(db,'SELECT * FROM scheduler_batches WHERE day=?',(str(day),))}
     jobs=_rows(db,'SELECT id,slot,status,attempt_id FROM scheduler_jobs WHERE day=?',(str(day),))
     by_slot={};stage_samples=[];job_ids={j['id'] for j in jobs}
@@ -106,15 +119,30 @@ def report(db,day,now):
             by_slot[r['slot']]=sanitize_window(r.get('effective_window'))
         elif r.get('event')=='stage_timing' and type(r.get('job')) is int and r['job'] in job_ids:stage_samples.append(r)
     result=[]
-    for i,S in enumerate(slots):
-        capacity=policy.batch_attempt_limit(cfg,i)
-        batch=batches.get(i);N=slots[i+1] if i+1<len(slots) else None
+    indices=sorted(batches) if adaptive else range(len(slots))
+    for i in indices:
+        batch=batches.get(i);target=targets.get(i)
+        planned_adaptive=target is not None
+        S=batch['started_at'] if planned_adaptive or i>=len(slots) else slots[i]
+        N=None if planned_adaptive else slots[i+1] if i+1<len(slots) else None
+        boundary=day_start+timedelta(days=1) if planned_adaptive else E
+        capacity=target['target_attempts'] if planned_adaptive else policy.batch_attempt_limit(cfg,i)
         observed=by_slot.get(i,{})
         marks={**observed,**({k:batch.get(k) for k in ('finished_at',)} if batch else {})}
         if batch:marks['claimed_at']=batch['started_at']
         status=batch['status'] if batch else ('scheduled' if now<moment(S) else 'claimable' if now<=moment(S)+timedelta(seconds=120) else 'missed')
-        window=effective_window(S,N,E,observations=marks,now=now,phase=status,
+        window=effective_window(S,N,boundary,observations=marks,now=now,phase=status,
             reason='quota' if 'quota' in observed.get('causes',[]) else None)
+        if planned_adaptive:
+            # Only durable observations can refine the midnight guard. A cached
+            # forecast's next start never becomes an execution deadline.
+            for key in ('Dread','Dintent','click_deadline'):
+                if moment(observed.get(key)):window[key]=observed[key]
+            intent=moment(window['Dintent']);ready=moment(window['spacing_ready_at'])
+            window.update(N=None,next_slot_delay_seconds=None,claim_grace_exceeded=False,
+                remaining_before_intent_seconds=max(0,(intent-now).total_seconds()),
+                intent_closed=now>=intent,
+                intent_seconds_available=max(0,(intent-ready).total_seconds()) if ready else None)
         # Preserve measured cause flags, even after the state that explained them changed.
         window['causes']=list(dict.fromkeys(observed.get('causes',[])+window['causes']))
         selected=[j for j in jobs if j['slot']==i]
@@ -126,13 +154,14 @@ def report(db,day,now):
                        'next_not_started_before_intent':status=='batch_action_deadline' and 0<attempts<capacity,
                        'fourth_not_started_before_intent':capacity==4 and status=='batch_action_deadline' and attempts==3,
                        'unclaimed_after_grace':status=='missed'})
+        if adaptive:result[-1]['planning_mode']='adaptive' if planned_adaptive else 'legacy'
     from vk_action_timing import summarize
     counts=Counter(r['status'] for r in result)
     return {'day':str(day),'slots':result,'stages':summarize(stage_samples),
             'diagnostics_truncated':truncated,
-            'summary':{'theoretical_attempts':len(slots)*maximum_capacity,
+            'summary':{'theoretical_attempts':sum(r['batch_capacity'] for r in result) if adaptive else len(slots)*maximum_capacity,
                        'planned_attempt_capacity':sum(r['batch_capacity'] for r in result),
-                       'daily_quota':policy.daily_total(cfg),
+                       'daily_quota':policy.daily_total(config if adaptive and config is not None else cfg),
                        'attempts':sum(r['attempts'] for r in result),'verified':sum(j['status']=='verified' for j in jobs),
                        'missed':counts['missed'],'empty':sum(r['attempts']==0 and r['finished_at'] is not None for r in result),
                        'partial':sum(0<r['attempts']<r['batch_capacity'] and r['finished_at'] is not None for r in result)}}

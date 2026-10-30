@@ -1,5 +1,15 @@
 # ПОЛНЫЙ КОНТЕКСТ РАЗРАБОТКИ — VK Unified / VK Bot
 
+30октября: текущая разработка adaptivequeue, прямой выбор пользователя:
+00–24YEKT,540сек отдыха ПОСЛЕ finished_at; квоты считают все попытки, в том числе
+ошибки/uncertain. Pureplanner+readonlymetrics+AdaptiveState/Worker добавлены,
+actualhistory неизменна, новые IDs после всех старых индексов. Включение и квоты
+на следующей пачке, активный состав/config/target фиксируются, disable немедленный.
+Никакого fixednextslotdeadline/120secgrace для adaptive, только календарный конец
+с120сек запасом; прогноз явно показывает недобор. Legacy DEFAULT и исторические
+планы сохранены. Полные проверки/CI/VMустановка ещё в работе;5229d66 ниже —
+последняя подтверждённая установка до новой приёмки. См.ADAPTIVE_QUEUE_2026_10_30.md.
+
 30октября12:06:30YEKT: установлен exact5229d66 после greenLinux/Windows/OMSUCI,
 local1123PASS/0skip/324.866с, source-onlyVM1123PASS/25Node-skip/628.308с,
 review/desktop+mobilePASS. Initial+3date-reading windows затем typedskip безpause;

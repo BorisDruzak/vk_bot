@@ -1,5 +1,12 @@
 # План продолжения VK Unified — v6.34
 
+- [x]30октября: согласован план adaptivequeue00–24YEKT,540сек отдыха после
+  завершения, лимиты попыток включая errors/uncertain; реализованы чистый расчёт,
+  метрики, durableclaims/пересчёт, worker и readonlypanel, desktop/mobileQA.
+- [ ]Полный замороженный local suite/review, main/exactgreenCI и source-onlyVMsuite.
+- [ ]Каноническая установка adaptivequeue сbackup и сверкой oldhistory/quotas,
+  activeclaim/rest/no-nextdaybacklog; затем фактическая приёмка штатной пачки.
+
 - [x]28октября: четыре равные квоты50/10/20 и настроенное окно09–22,
   будущие320/80с29октября, сегодняшний09–19/60план сохранён;actor6подключён,
   policy сохранена,enabledFalse.728local/728VM(skip19Node),review,UI,backup/proof.
