@@ -1,14 +1,18 @@
 # ПОЛНЫЙ КОНТЕКСТ РАЗРАБОТКИ — VK Unified / VK Bot
 
-30октября: подготовлены initial+3 date-reading windows/typed skip безpause
-и два видаschedulerblock. Manual не истекает, automatic — на следующем
-более позднем savedday в будущийsavedslot. Exactdate receipt сохраняет
-attempt/intent/uncertain/spend, не разрешает resend; oldjobs1244/1245 прежние.
-Новыеучасткитестов/review/desktop+mobilePASS; базовыйUTF8 local1116PASS/317.471с.
-После финального различения ManualBlockActive/настоящихошибок121focusedPASS,
-повторноеreviewбезблокеров, finaldiscovery1123. ПолныеfinalUTF8/CI/VM/deploy
-gates покаожидаются. См.SOURCE_DATE_BLOCKS_2026_10_30.md
-и plan30Oct-source-date-and-blocks.
+30октября12:06:30YEKT: установлен exact5229d66 после greenLinux/Windows/OMSUCI,
+local1123PASS/0skip/324.866с, source-onlyVM1123PASS/25Node-skip/628.308с,
+review/desktop+mobilePASS. Initial+3date-reading windows затем typedskip безpause;
+attempt/intent/uncertain/spend сохраняются, resendнет. ManualBlockActive не
+создаёт второй блок, настоящие ошибки под manual сохраняют причины/последнийдень.
+Manual не истекает; automatic — на следующем более позднем savedday в futuregate.
+Backup11DB/integrityok+27JSON;10files/163swapchecks/151postrestarttables,
+POSoverlay/favicon/TaskXML/flags прежние. Только новая пустаяscheduler_date_skips.
+Приёмка12:10:37: worker7636/live/waiting_batch,pausedNULL/stopFalse,
+gate12:19:15/no-catchup; today67/390/55six12five, allsavedplans/oldactorhistory/
+quotas/registry/bindings неизменны. Все5enabled,«Собрание»50/0/20;1245failed/
+attemptNULL сохранён. ПриёмкаVKrequests/actions0. См.SOURCE_DATE_BLOCKS_2026_10_30.md
+и plan30Oct-source-date-and-blocks. Кандидаты7456b56/8afcb61 не устанавливались.
 
 30октября10:30:37YEKT: по явному разрешению снята только source_date_unavailable
 от29Oct20:46:44/job1245. Freshproof10:29:44–10:29:56: exactactor1/source-date

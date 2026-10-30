@@ -43,9 +43,10 @@ finish_job/interrupted/pause. Поэтому второй action-pass не со�
 `paused` остаётся совместимой строкой; scheduler_block дополнительно хранит
 тип, причину и время/деньYEKT. Новые ошибки worker создают automatic блок.
 
-**Ручной:** сохраняется после перезапуска и смены дня. Команды оператора:
-`python vk_unified.py --scheduler-manual-block` и
-`python vk_unified.py --scheduler-manual-unblock`.
+**Ручной:** сохраняется после перезапуска и смены дня. Команды оператора
+на основной VM из `C:\Users\vk-bot\vk_bot`:
+`.venv\Scripts\python.exe vk_unified.py --scheduler-manual-block` и
+`.venv\Scripts\python.exe vk_unified.py --scheduler-manual-unblock`.
 Снятие относится только к явному manual_block, требует отсутствия активной
 работы и будущего сохранённого слота. Legacy блок без достоверных metadata
 считается ручным; эти команды не заменяют и не снимают его защитную причину.
@@ -82,12 +83,36 @@ PlaywrightMCP: desktop1440×1000 и mobile390×844, оба типа блока,
 переполнения и console errors нет. Browser plugin не установлен, использован
 настроенный PlaywrightMCP и синтетическая локальная панель без VM/секретов.
 
-Полный локальный прогон выполнен в штатном UTF-8, какCI/VM:
-`python -X utf8 -m unittest discover -s tests -q`.
-Первый запуск без UTF-8 выявил старый fixture read_text(cp1251), а не ошибку
-runtime. Базовый полный прогон1116PASS/0ошибок/0skip/317.471сек,
-Windows/Python3.14.3. Окончательное различение ManualBlockActive и настоящих
-защитных ошибок проверено121целевым тестом и повторным независимым ревью
-без оставшихся блокирующих замечаний. Окончательный discovery1123.
-Точные результаты окончательного полного прогона/CI/VM/установки дополняются по факту.
-Исходники не устанавливаются до exactgreenCI и source-onlyVMтестов.
+Окончательный полный localUTF8 discovery1123PASS/0ошибок/0skip/324.866сек,
+Windows/Python3.14.3. Изолированный VMsource-only discovery1123PASS,
+0ошибок/25Node-skip/628.308сек, Python3.13.17/Playwright1.64.1.
+Повторное независимое ревью различения ManualBlockActive и настоящих
+защитных ошибок блокирующих замечаний не нашло.
+
+Exact source `5229d66bd4bd57baf25008785d9a1dbe0aeec071` прошёл SUCCESS:
+[Offline checks, Linux3.12/Windows3.14](https://github.com/BorisDruzak/vk_bot/actions/runs/41014563561),
+[OMSU analytics](https://github.com/BorisDruzak/vk_bot/actions/runs/41014563563).
+Пакет и manifest связаны SHA256 с VMtestproof. Предыдущие7456b56/8afcb61
+не устанавливались; установлен только окончательный5229d66 после всех gates.
+
+## Фактическая установка
+
+30октября12:06:30YEKT установлен5229d66. Старыйworker3592 завершил текущую
+пачку естественно; в12:05:23 под exclusivelease записана штатная остановка
+только для установки. Backup11SQLite/integrityok+27JSON;10исходников,
+163табличные/схемные сверки при swap. POSoverlayvk_web.py иfavicon сохранены.
+ИсходныеTaskXML/enabledflags восстановлены. Новыйworker7636/live/waiting_batch,
+pausedNULL/stopFalse, gate следующего сохранённого слота12:19:15/no-catchup.
+
+Приёмка12:07:44:11DB/151прежнихтаблиц и все старые схемы сохранены; разрешено
+только создание пустой scheduler_date_skips. Хеши исходников иHTTPпанель сверены.
+Дополнительная приёмка12:10:37: все saved_days/config/slots неизменны,
+today30Oct67/390/55×6+12×5. Registry/bindings/quotaJSON совпали с backup;
+все пять enabled, старые четыре50/10/20 и«Собрание»50/0/20. №1245failed/
+attemptNULL и исторические остановки не переоткрывались. Activeuncertain0.
+Приёмка не выполняла VK-запросов или действий; живая дата-ошибка после
+установки не провоцировалась. Автоматическое снятие на следующем дне
+проверено изолированными тестами, а не искусственной сменой времени VM.
+
+Приватные receipts: `outputs/source-date-blocks-2026-10-30-final/` локально.
+VMbackup: `C:\Users\vk-bot\vk_backups\date-blocks-20261030-final`.

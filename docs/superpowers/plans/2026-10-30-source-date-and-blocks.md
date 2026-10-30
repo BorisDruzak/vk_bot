@@ -20,8 +20,8 @@
 - [x] RED/GREEN scheduler date-skip receipts, quota/intent preservation, same-post exclusions, first/second-pass and three-skip/non-stop regressions.
 - [x] RED/GREEN manual/automatic block lifecycle, overwrite/restart/legacy/date rollover/no-catchup tests; wire tick/CLI/status.
 - [x] Independent review, meaningful focused tests and full isolated local suite. Update architecture/context and user-facing behavior docs.
-- [ ] Commit/pushmain; exactSHA green Linux/Windows/analyticsCI. Source-only isolatedVM suite.
-- [ ] Canonical natural-quiescence/backup/source-only install. Preserve all saved plans/actor histories/quotas/guards/POSoverlay; restore tasks and future-slotgate. Verify live state without test actions.
+- [x] Commit/pushmain; exactSHA green Linux/Windows/analyticsCI. Source-only isolatedVM suite.
+- [x] Canonical natural-quiescence/backup/source-only install. Preserve all saved plans/actor histories/quotas/guards/POSoverlay; restore tasks and future-slotgate. Verify live state without test actions.
 
 ## Review focus
 
@@ -38,3 +38,5 @@ Ruling: automatic pause calls under an existing manual block must not overwrite 
 Review correction: suppress only proven ManualBlockActive, not real failures while manual is active. Preserve original automatic reason plus additional causes; latest genuine failure day controls expiry. Typed State.guard/click/confirmation guard never enters technical retry. Concurrent manual/date skip retains existing block without fabricating StopRun. Added actual worker and real mismatch/cleanup regressions;121focusedPASS, repeat independentreview no blockers. Final discovery1123; candidates7456b56/8afcb61 not installed. Final exactSHA CI/VM suite required.
 
 Ruling: after focused121PASS and clean independent review, publish the frozen candidate while the full local UTF8 run finishes, allowing CI/isolatedVM verification to overlap. No runtime deployment until final local full/CI/VM gates pass for this unchanged source; a failed check requires repair and a new candidate. This avoids waiting serially for three full suites while the old worker continues its saved schedule.
+
+COMPLETE30Oct12:10:37YEKT: exact5229d66 greenCI41014563561(Linux+Windows)/41014563563(OMSU); local1123PASS/0skip/324.866s; isolatedVM1123PASS/25Node-skip/628.308s. Installed12:06:30 after natural batch quiescence,11DB/integrityok+27JSONbackup,10files/163swapchecks/151postrestarttables preserved. Only empty scheduler_date_skips added; POSoverlay/favicon/TaskXML/flags retained. Worker7636/live/waiting_batch/pausedNULL, gate12:19:15/no-catchup. All saved plans/current67/390/55six12five/oldfourquotas/fifth50-0-20/registry/bindings/actorhistory unchanged. Job1245failed/attemptNULL. Acceptance0VKrequests/actions. Private receipts outputs/source-date-blocks-2026-10-30-final and VMbackups/date-blocks-20261030-final.
