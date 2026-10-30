@@ -13,12 +13,13 @@ GUARDS={'footer_unknown','footer_root_missing','footer_wrong_primary','footer_ne
         'footer_like_state_unknown','footer_like_label_conflict','footer_share_not_unique','footer_action_invalid',
         'footer_scroll_failed','footer_like_already_set','pre_action_source_missing','pre_action_like_state_conflict',
         'pre_action_state_unknown','pre_action_permission_unproven'}
-TYPES={'StopRun','ActionGuardError','ActionConfirmationError','ScheduledActionStopped','SourceDateUnavailable','CommunityConfirmationError','CommunityPreparationTimeout',
+TYPES={'StopRun','ActionGuardError','ActionConfirmationError','ScheduledActionStopped','SourceDateUnavailable','ManualBlockActive','CommunityConfirmationError','CommunityPreparationTimeout',
        'ActionTransportError',
        'PlatformRateLimited','PostUnavailable','PostTemporaryError','PostMarkupUnknown','RuntimeError','ValueError',
        'TypeError','KeyError','AttributeError','OperationalError','DatabaseError','IntegrityError','OSError',
        'TimeoutError','Error','BatchSpacingWait','RunAlreadyActive','VkApiFailure','VkApiLimited','VkApiProtection','VkApiAuthFailure','VkApiTransientRead','VkApiReadDeadline','AccountError','SafetyLimitReached'}
 REASONS={*TYPES,*('guard_'+g for g in GUARDS),*('action_stopped_'+s for s in STAGES),
+         'manual_block',
          'like_transport_error','repost_transport_error','action_failures_repeated',
          'like_confirmation_timeout','repost_confirmation_timeout','community_confirmation_timeout',
          'community_confirmation_ambiguous','community_prepare_timeout','vk_like_denied','vk_repost_denied','technical_before_send','technical_error_repeated'}

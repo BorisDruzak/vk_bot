@@ -4,6 +4,7 @@ from urllib.error import HTTPError
 import vk_batch as engine
 import vk_api_read as api
 import vk_scheduled_action as actions
+from vk_scheduler_blocks import ManualBlockActive
 
 
 def is_technical(error,scope):
@@ -12,6 +13,7 @@ def is_technical(error,scope):
         chain.append(current);seen.add(id(current));current=current.__cause__ or current.__context__
     if current is not None:return False  # A hidden guard or cyclic chain is not proven safe.
     for exc in chain:
+        if isinstance(exc,ManualBlockActive):return False
         if getattr(exc,'stage',None)=='cleanup':return False
         if isinstance(exc,HTTPError) and not (scope=='read' and isinstance(error,api.VkApiTransientRead)
                 and exc.code in (500,502,503,504)):return False

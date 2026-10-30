@@ -4,8 +4,10 @@
 и два видаschedulerblock. Manual не истекает, automatic — на следующем
 более позднем savedday в будущийsavedslot. Exactdate receipt сохраняет
 attempt/intent/uncertain/spend, не разрешает resend; oldjobs1244/1245 прежние.
-Новыеучасткитестов/review/desktop+mobilePASS; полныйUTF8 local1116PASS/317.471с.
-CI/VM/deploy gates покаожидаются. См.SOURCE_DATE_BLOCKS_2026_10_30.md
+Новыеучасткитестов/review/desktop+mobilePASS; базовыйUTF8 local1116PASS/317.471с.
+После финального различения ManualBlockActive/настоящихошибок121focusedPASS,
+повторноеreviewбезблокеров, finaldiscovery1123. ПолныеfinalUTF8/CI/VM/deploy
+gates покаожидаются. См.SOURCE_DATE_BLOCKS_2026_10_30.md
 и plan30Oct-source-date-and-blocks.
 
 30октября10:30:37YEKT: по явному разрешению снята только source_date_unavailable

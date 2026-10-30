@@ -146,6 +146,7 @@ class RetryLedger:
         r,j=self._running(job)
         self.state.require_not_isolated(j['account'],j['group_id'],j['post_id'])
         if r['passes']==2 and j['attempt_id'] is not None:
+            self.state.require_unblocked()
             if (not self.state.account_enabled(j['account']) or self.state.get('stop_requested',False)
                     or self.state.blocked()):
                 raise RuntimeError('Confirmation identity read is blocked')
@@ -296,8 +297,10 @@ def retryable(error,job):
         seen.add(id(exc));chain.append(exc);exc=exc.__cause__ or exc.__context__
     if exc is not None:return False
     import vk_scheduled_action as action
+    from vk_scheduler_blocks import ManualBlockActive
     import vk_api_read as api
     for exc in chain:
+        if isinstance(exc,ManualBlockActive):return False
         if isinstance(exc,action.community.ui.CommunityPreparationTimeout):
             if (type(exc) is not action.community.ui.CommunityPreparationTimeout or exc is not error
                     or exc.stage!='community_prepare' or exc.reason_code!='community_prepare_timeout'
@@ -404,7 +407,8 @@ def execute_job(worker,job,row,slot,capacity):
             p=state.db.execute('SELECT * FROM scheduler_action_passes WHERE job_id=? AND pass=?',(job,r['passes'])).fetchone()
             if date_skip_error(exc) and book.skip_date(job,worker.clock()):
                 if p['intent'] and p['attempt_id'] is None:attempted+=1
-                if state.blocked() or not actor_uncertainties_safe(state):
+                if state.blocked():return {'attempted':attempted,'phase':'attention','skipped':0}
+                if not actor_uncertainties_safe(state):
                     state.pause('StopRun')
                     return {'attempted':attempted,'phase':'attention','skipped':0}
                 log('action_result',outcome='date_skipped',reason='action_stopped_source_date_unavailable',attempt_id=current['attempt_id'])

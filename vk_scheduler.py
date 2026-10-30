@@ -35,6 +35,8 @@ def utcnow():return datetime.now(timezone.utc)
 
 
 def safe_failure_reason(exc):
+    from vk_scheduler_blocks import ManualBlockActive
+    if type(exc) is ManualBlockActive:return 'manual_block'
     if type(exc) is actions.community.ui.CommunityPreparationTimeout:
         if exc.stage=='community_prepare' and exc.reason_code=='community_prepare_timeout':return exc.reason_code
     if isinstance(exc,engine.ActionTransportError):
@@ -450,7 +452,8 @@ class Worker:
                     reason=safe_failure_reason(exc)
                     if action_retry.date_skip_error(exc) and action_retry.RetryLedger(self.state).skip_date(job,self.clock()):
                         attempted+=int(uncertain)
-                        if self.state.blocked() or not action_retry.actor_uncertainties_safe(self.state):
+                        if self.state.blocked():phase='attention';break
+                        if not action_retry.actor_uncertainties_safe(self.state):
                             self.state.pause('StopRun');phase='attention';break
                         log_action('action_result',outcome='date_skipped',reason=reason,attempt_id=saved['attempt_id'])
                         continue

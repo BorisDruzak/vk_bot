@@ -103,6 +103,13 @@ class State:
     def blocked(self):
         return bool(self.get('paused') or self.active_uncertain_count())
 
+    def require_unblocked(self):
+        block=self.block_status()
+        if block and block['kind']=='manual' and block['reason']=='manual_block' and not block.get('legacy'):
+            from vk_scheduler_blocks import ManualBlockActive
+            raise ManualBlockActive('Queue manually blocked')
+        if self.blocked():raise RuntimeError('Scheduler paused or has an uncertain action')
+
     def active_uncertain_count(self):
         rows=self.db.execute('''SELECT j.* FROM scheduler_jobs j WHERE j.status='uncertain'
           AND NOT EXISTS(SELECT 1 FROM scheduler_post_isolations i WHERE i.job_id=j.id
@@ -242,7 +249,7 @@ class State:
         day=str(policy.local_day(now))
         if not self.account_enabled(account):raise RuntimeError('Account disabled from queue')
         if self.get('stop_requested',False):raise RuntimeError('Scheduler stop requested')
-        if self.blocked():raise RuntimeError('Scheduler paused or has an uncertain action')
+        self.require_unblocked()
         # Leave30s for bounded UI checks/click after the final reservation.
         start,end=policy.work_bounds(now,self.config)
         if not start<=now.astimezone(timezone.utc)<end-timedelta(seconds=30):
@@ -254,6 +261,7 @@ class State:
         return self.action_now(now,day=day)
 
     def click_timeout(self,job,now):
+        self.require_unblocked()
         row=self.db.execute('SELECT day,status,account,group_id,post_id FROM scheduler_jobs WHERE id=?',(job,)).fetchone()
         if row:self.require_not_isolated(row['account'],row['group_id'],row['post_id'])
         if (not row or row['day']!=str(policy.local_day(now)) or row['status']!='attempting'

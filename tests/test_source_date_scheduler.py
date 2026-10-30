@@ -98,3 +98,29 @@ class DateSkipSchedulerTests(unittest.TestCase):
         self.assertEqual(result['attempted'],4)
         self.assertEqual(sum(self.state.usage(self.now).values()),4)
         self.assertFalse(self.state.blocked())
+
+    def test_manual_guard_during_preparation_does_not_create_phantom_automatic_block(self):
+        def execute(a,k,row,**kw):
+            self.state.pause('manual_block',kind='manual',now=self.now)
+            kw['before_attempt']()
+        self.assertEqual(self.run_fake(execute)['phase'],'attention')
+        self.assertEqual(self.state.get('paused'),'manual_block')
+        self.assertIsNone(self.state.get('scheduler_suspended_automatic_block'))
+        self.assertEqual(sum(self.state.usage(self.now).values()),0)
+
+    def test_manual_guard_after_attempt_preserves_unresolved_outcome(self):
+        def execute(a,k,row,**kw):
+            self.reserve(row,kw);self.state.pause('manual_block',kind='manual',now=self.now)
+            kw['before_identity_read']()
+        self.assertEqual(self.run_fake(execute)['phase'],'attention')
+        self.assertIsNone(self.state.get('scheduler_suspended_automatic_block'))
+        self.assertEqual(sum(self.state.usage(self.now).values()),1)
+        self.assertEqual(self.state.active_uncertain_count(),1)
+
+    def test_concurrent_manual_block_on_date_exhaustion_keeps_only_manual_block(self):
+        def execute(a,k,row,**kw):
+            self.state.pause('manual_block',kind='manual',now=self.now)
+            raise actions.SourceDateUnavailable()
+        self.assertEqual(self.run_fake(execute)['phase'],'attention')
+        self.assertEqual(self.state.get('paused'),'manual_block')
+        self.assertIsNone(self.state.get('scheduler_suspended_automatic_block'))

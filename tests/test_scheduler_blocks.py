@@ -92,9 +92,29 @@ class BlockLifecycleTests(unittest.TestCase):
 
     def test_failure_due_to_manual_guard_does_not_create_an_extra_automatic_block(self):
         self.plan(self.now);self.state.pause('manual_block',kind='manual',now=self.now)
-        self.state.pause('RuntimeError',now=self.now)
+        with self.assertRaises(RuntimeError) as caught:self.state.require_unblocked()
+        self.assertEqual(getattr(caught.exception,'reason_code',None),'manual_block')
+        self.state.pause(caught.exception.reason_code,now=self.now)
         self.assertTrue(self.state.clear_manual_block(now=self.now))
         self.assertIsNone(self.state.get('paused'))
+
+    def test_real_protection_under_manual_switch_is_retained(self):
+        self.plan(self.now);self.state.pause('manual_block',kind='manual',now=self.now)
+        self.state.pause('action_stopped_source_date_mismatch',now=self.now)
+        self.assertTrue(self.state.clear_manual_block(now=self.now))
+        self.assertEqual(self.state.get('paused'),'action_stopped_source_date_mismatch')
+
+    def test_new_failure_under_manual_switch_extends_auto_day_and_preserves_causes(self):
+        self.state.pause('OSError',now=self.now)
+        self.state.pause('manual_block',kind='manual',now=self.now)
+        later=self.now+timedelta(days=1);self.plan(later)
+        self.state.pause('action_stopped_cleanup',now=later)
+        self.assertTrue(self.state.clear_manual_block(now=later))
+        self.assertEqual(self.state.get('paused'),'OSError')
+        self.assertEqual(self.state.block_status()['day'],'2026-10-31')
+        self.assertFalse(self.state.expire_automatic_block(later))
+        causes=self.state.get('scheduler_block')['causes']
+        self.assertEqual([c['reason'] for c in causes],['OSError','action_stopped_cleanup'])
 
     def test_expiration_resets_failure_streak_without_changing_history(self):
         self.state.pause('OSError',now=self.now)

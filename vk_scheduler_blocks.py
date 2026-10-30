@@ -4,6 +4,10 @@ from datetime import datetime,timedelta,timezone
 import vk_schedule_policy as policy
 
 
+class ManualBlockActive(RuntimeError):
+    reason_code='manual_block'
+
+
 def _put(db,key,value):
     db.execute('INSERT INTO scheduler_meta VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
                (key,json.dumps(value)))
@@ -47,6 +51,15 @@ def pause(state,reason,*,kind='automatic',now=None):
         if kind=='manual' and existing and existing['kind']=='manual':
             return not existing.get('legacy',False) and existing['reason']=='manual_block' and str(reason)=='manual_block'
         if kind=='automatic' and existing and existing['kind']=='manual':
+            if str(reason)=='manual_block':return False
+            pending=state.get('scheduler_suspended_automatic_block')
+            if pending is None:
+                _put(state.db,'scheduler_suspended_automatic_block',record)
+            elif isinstance(pending,dict) and _valid_record(pending,pending.get('reason')) and pending['kind']=='automatic':
+                causes=pending.get('causes') or [{k:pending[k] for k in ('reason','at','day')}]
+                merged={**pending,'causes':[*causes,{k:record[k] for k in ('reason','at','day')}]}
+                if record['day']>=pending['day']:merged.update(at=record['at'],day=record['day'])
+                _put(state.db,'scheduler_suspended_automatic_block',merged)
             return False
         if kind=='manual' and existing and existing['kind']=='automatic':
             _put(state.db,'scheduler_suspended_automatic_block',state.get('scheduler_block'))
@@ -72,7 +85,7 @@ def expire(state,now):
         if not future:return False
         slot,gate=future[0]
         _put(state.db,'last_scheduler_block_release',{'kind':'automatic','reason':block['reason'],'blocked_day':block['day'],
-            'at':now.isoformat(),'day':day,'slot':slot,'resume_at':gate.isoformat()})
+            'at':now.isoformat(),'day':day,'slot':slot,'resume_at':gate.isoformat(),'block_record':state.get('scheduler_block')})
         _put(state.db,'resume_not_before',gate.timestamp());_put(state.db,'paused',None);_put(state.db,'scheduler_block',None)
         _put(state.db,'action_failure_streak',0)
         _put(state.db,'technical_failures',{'read':0,'action':0})
