@@ -22,7 +22,10 @@
 - [x] Simulate whole390, late32, slow batches, failures, account enable and continuous multi-day rolling budget. Compare old/new calls; never label simulations live acceptance.
 - [x] Reproduce/fix exact-date script parsing and safe source-specific DOM handling. Preserve conflicting/mismatched dates and initial+3 windows, then date-skip without pause. Anonymous diagnostics must not expose raw DOM,URLs,headers,IDs or secrets.
 - [x] Independent review; full local suite; document measured counts and limits.1235PASS/0skip/334.990s;151date-focused PASS. No installation into a running process.
-- [ ] Publish main and inspect exact-SHA CI; activation remains separate from publication.
+- [x] Publish main5fefa96 and inspect exact-SHA CI: offline+analytics success.
+- [x] After a separate explicit user authorization: isolatedVM1235PASS/33Node-skips,
+  naturalbatch66finish22:10:26, quietstop22:14:03, install22:16:06 with11DB/27JSONbackup,
+  unchangedhistory/quotas/config/schema. Read-onlyacceptance22:17PASS, gate22:19:26=finish+540.
 
 ## Progress
 

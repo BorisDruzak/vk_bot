@@ -101,8 +101,46 @@ tests PASS, compilation and diff checks PASS. The added regressions were first
 observed failing, then passing. Independent review has no remaining findings.
 Exact commit CI is checked separately on GitHub; a local pass is not CI proof.
 
-Status: source repair verified locally and ready for publication. Running VM
-process3084 remains unchanged and is not stopped,
-restarted or hot-patched. Production histories, quotas, bindings, saved claims
-and paused states are untouched. Activation requires a separate safe process
-transition; publication alone does not install new code into a running process.
+## Installed after explicit authorization
+
+Source `5fefa96fc40c0ba3113faf8caaea9aede14cf7b3` installed on the canonical VM
+at22:16:06YEKT. Exact [offline Linux/Windows CI](https://github.com/BorisDruzak/vk_bot/actions/runs/41326336867)
+and [analytics CI](https://github.com/BorisDruzak/vk_bot/actions/runs/41326336861)
+both completed successfully. The291-file frozen package was tested separately
+on the VM:1235tests,0errors/0failures,33Node-only skips,583.465seconds.
+Those Node checks passed locally and in CI. The first VM test attempt lacked
+the SSH user's browser cache; its failed receipt is retained. A per-test-process
+browser cache path fixed the environment; the final full run used a clean
+extraction of the same immutable package. No dependency/runtime setting changed.
+
+The user explicitly authorized a safe update/restart after natural completion.
+Batch66 finished22:10:26.244642. An exclusive quiet activity lease admitted the
+graceful stop request22:14:03.998084, with no running job/pass/batch and no worker
+force-kill. Backup:11SQLite databases/integrityOK and27JSON configs. Only5Python
+modules changed;47unchanged source/assets and the VM-only POS web overlay/favicon
+were checked.168table/schema checks at swap and157tables after restart passed.
+All prior adaptive claims, forecast rows, recoveries, jobs, actor attempts,
+date-skips, quotas, bindings and JSON bytes were preserved. Schema/config changes:0.
+The original task XML and enabled flags were restored exactly.
+
+Read-only acceptance22:17:23: PID9936 live/waiting_batch, pausedNULL/stopFalse,
+0inflight/unfinished/running passes,2373old jobs unchanged; HTTP root/app/session
+all200,0VKrequests/0actions made for acceptance. Idle diagnostic/current-day
+forecast appends are allowed; every old row remains unchanged.
+
+Resume gate and next forecast are22:19:26.244642, exactly540seconds after batch66
+finished. At22:18:14, daily spend remains374/390 (234likes,40personal,100community),
+16likes remaining, no active uncertainty. The running new planner reports
+`refresh_work_ratio=2`,1future batch/target16/82estimated reads, versus the old
+4batches/target4/280reads for the identical remainder.296reads are available;
+the estimated completion22:43:51 is a forecast, not a verified action result.
+Old skipped jobs are not reopened; only future unclaimed work is recalculated.
+
+Actual first restart claim: batch67 began22:19:26.761824,540.517182seconds after
+batch66's full finish. PID9936 was refreshing counters at22:19:37, no pause or
+active uncertainty; spend374 remains unchanged before the new attempts.
+There was no overlap or early start. This proves resume admission and the
+new16-attempt claim, not completion of that still-running batch.
+
+Private backup/receipts: `C:\Users\vk-bot\vk_backups\api-date-20261101`.
+Local receipt copies: `outputs/api-budget-dates-2026-11-01`.

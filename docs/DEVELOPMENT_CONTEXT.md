@@ -1,5 +1,18 @@
 # ПОЛНЫЙ КОНТЕКСТ РАЗРАБОТКИ — VK Unified / VK Bot
 
+1ноября22:16:06YEKT: source5fefa96 установлен после явного разрешения на безопасный
+restart. Exactoffline/analyticsCIgreen; VM1235/0errors/0failures/33Node-skip/583.465s.
+Batch66finish22:10:26.244642, quiescentstop22:14:03.998084; backup11DB/integrityOK+
+27JSON,5moduleschanged/47unchanged+POSoverlay/faviconretained,168swapchecks/
+157tablesafterrestartPASS. Config/schema0changes, всеoldclaims/jobs/attempts/
+quotas/history/bindings/date-skips сохранены. PID9936/live/waiting_batch,
+pausedNULL/stopFalse; next22:19:26.244642=finish+540. Приёмка0VK/0actions.
+Spend374/390; remaining16; новыйforecast1batch/16target/82reads вместо4/4/280,
+api_available296. Перваяфактическаяclaim67 —22:19:26.761824, rest540.517182сек
+послеfinish66, target16; PID9936refreshing_counters/pausedNULL/activeuncertain0.
+Это проверка допуска/отдыха, не утверждение о завершении ещё работающейпачки.
+См.API_BUDGET_AND_DATES_2026_11_01.md; запись «неостанавливался» ниже — до нового разрешения.
+
 1ноября: read-only расход4440=4311worker wall+65alias users.get+64внепачек.
 Причина — максимизация количествапачек при полном64grouprefreshкаждыйраз.
 Подготовлен preferredcount<=floor(weightedactionwork/(2refresh)),min1:
