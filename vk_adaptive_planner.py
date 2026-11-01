@@ -12,6 +12,9 @@ import math
 _UTC = timezone.utc
 _YEKT = timezone(timedelta(hours=5))
 _DAY_SECONDS = 86400
+# Amortize the full allowlist refresh instead of maximizing its repetitions.
+# This is a preferred cadence only; small remainders still get one fresh batch.
+_REFRESH_WORK_RATIO = 2.0
 
 
 def _utc(value, name):
@@ -53,9 +56,10 @@ def plan_day(now, end, remaining, action_seconds, refresh_seconds, refresh_reque
     api_available is capacity free *now*, before this reservation; api_required
     includes planned reads and the reservation, not already-spent ledger reads.
 
-    Pick the most balanced batches that fit the complete weighted mix. If that
+    Balance batches while amortizing preparation: prefer at least twice the
+    refresh duration in action work per batch. If that
     is impossible, report the shortfall explicitly and find the largest safe
-    same-mix estimate, again using the most batches. No remainder crosses days.
+    same-mix estimate with the same cadence preference. No remainder crosses days.
     not_before may delay admission without changing the actual now/rolling ledger.
     The one-day time/pacing bounds also bound work for huge input quotas.
     """
@@ -204,6 +208,14 @@ def plan_day(now, end, remaining, action_seconds, refresh_seconds, refresh_reque
         if room < 0:
             return None
         upper = min(attempt_count, max(1, math.floor((room + rest) / (refresh + rest) + 1e-9)))
+        if refresh:
+            # The previous maximum-time-fit policy repeatedly refreshed every
+            # allowed group for just a handful of actions and approached 5000
+            # reads/day. Derive a useful-work bound from measured durations;
+            # never skip a refresh, reuse stale counts or change daily quotas.
+            economic = max(1, math.floor(attempt_count * average /
+                                         (_REFRESH_WORK_RATIO * refresh) + 1e-9))
+            upper = min(upper, economic)
         for batch_count in range(upper, 0, -1):
             batches = simulate(attempt_count, batch_count)
             if batches is not None:
@@ -251,6 +263,7 @@ def plan_day(now, end, remaining, action_seconds, refresh_seconds, refresh_reque
             "action_seconds": costs,
             "refresh_seconds": refresh,
             "refresh_requests": requests,
+            "refresh_work_ratio": _REFRESH_WORK_RATIO,
             "rest_seconds": rest,
             "api_pause_seconds": pause,
             "api_limit": limit,

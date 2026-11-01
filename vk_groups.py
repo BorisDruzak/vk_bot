@@ -56,6 +56,9 @@ EXACT_DATE_JS = r"""
 ({groupId, postId}) => {
   const owner = -Number(groupId), id = Number(postId);
   const expectedPath = '/wall-' + Number(groupId) + '_' + id;
+  const dateDiagnostics = {live_arrays:0, inline_assignments:0, inline_arrays:0,
+    inline_invalid:0, json_post_matches:0, json_dates:0, post_roots:0, date_anchors:0, dom_dates:0};
+  const count = (key, n=1) => {dateDiagnostics[key] = Math.min(65535, dateDiagnostics[key]+n);};
   const inBounds = n => Number.isSafeInteger(n) && n > 1200000000 && n < 4102444800;
   const unix = raw => {
     if (!/^\d{10}(?:\d{3})?$/.test(String(raw || '').trim())) return null;
@@ -73,24 +76,32 @@ EXACT_DATE_JS = r"""
     return inBounds(n) ? n : null;
   };
   const result = (dates, source) => dates.size === 1
-      ? {publishedAt:[...dates][0], source, exact:true}
-      : {publishedAt:null, source:dates.size > 1 ? 'date-conflict' : 'date-unknown', exact:false};
+      ? {publishedAt:[...dates][0], source, exact:true, date_diagnostics:dateDiagnostics}
+      : {publishedAt:null, source:dates.size > 1 ? 'date-conflict' : 'date-unknown', exact:false,
+         date_diagnostics:dateDiagnostics};
   const candidateArrays = [];
-  if (Array.isArray(window.cur?.apiPrefetchCache))
+  if (Array.isArray(window.cur?.apiPrefetchCache)) {
     candidateArrays.push(window.cur.apiPrefetchCache);
+    count('live_arrays');
+  }
   for (const script of document.querySelectorAll('script:not([src])')) {
     const raw = script.textContent || '';
-    const marker = /window\.cur\.apiPrefetchCache\s*=\s*/.exec(raw);
-    if (!marker) continue;
-    const body = raw.slice(marker.index + marker[0].length);
-    const end = /;\s*window\.apiPrefetchReadyResolve\s*\(\s*\)/.exec(body);
-    if (!end || end.index > 8000000) continue;
-    const json = body.slice(0, end.index).trim();
-    if (!json.startsWith('[')) continue;
-    try {
-      const parsed = JSON.parse(json);
-      if (Array.isArray(parsed)) candidateArrays.push(parsed);
-    } catch (_) { /* NEVER execute scripts */ }
+    const markers = /window\.cur\.apiPrefetchCache\s*=\s*/g;
+    let marker;
+    // Hydration can assign the cache more than once in one script. Read all
+    // JSON snapshots, including conflicts; an early empty cache is not final.
+    while ((marker = markers.exec(raw)) !== null) {
+      count('inline_assignments');
+      const body = raw.slice(markers.lastIndex);
+      const end = /;\s*window\.apiPrefetchReadyResolve\s*\(\s*\)/.exec(body);
+      if (!end || end.index > 8000000) {count('inline_invalid'); continue;}
+      const json = body.slice(0, end.index).trim();
+      if (!json.startsWith('[')) {count('inline_invalid'); continue;}
+      try {
+        const parsed = JSON.parse(json);
+        if (Array.isArray(parsed)) {candidateArrays.push(parsed); count('inline_arrays');}
+      } catch (_) {count('inline_invalid'); /* NEVER execute scripts */}
+    }
   }
   const jsonDates = new Set();
   for (const entries of candidateArrays) {
@@ -98,34 +109,47 @@ EXACT_DATE_JS = r"""
       if (!['wall.getById', 'wall.get'].includes(entry?.method)) continue;
       for (const post of (entry?.response?.items || [])) {
         if (Number(post?.owner_id) !== owner || Number(post?.id) !== id) continue;
+        count('json_post_matches');
         const value = Number(post?.date);
         if (inBounds(value)) jsonDates.add(value);
       }
     }
   }
+  count('json_dates', jsonDates.size);
   if (jsonDates.size) return result(jsonDates, 'vk-post-json');
 
   // Never read timestamps in embedded reposts, recommendations, comments.
-  const root = document.querySelector('[data-testid="post"][data-post-id="-' + groupId + '_' + id + '"]');
+  const roots = document.querySelectorAll('[data-testid="post"][data-post-id="-' + groupId + '_' + id + '"]');
+  count('post_roots', roots.length);
+  if (roots.length > 1) return result(new Set(), 'date-unknown');
+  const root = roots[0];
   if (root) {
     const anchors = [...root.querySelectorAll('[data-testid="post_date_block_preview"]')]
       .filter(el => el.closest('[data-testid="post"][data-post-id]') === root)
       .filter(el => {try {return new URL(el.getAttribute('href') || '', 'https://vk.com/').pathname === expectedPath;}
                      catch (_) {return false;}});
-    if (anchors.length === 1) {
-      const anchor = anchors[0];
-      const time = anchor.matches('time[datetime]') ? anchor : anchor.querySelector('time[datetime]');
-      const isoDates = new Set();
-      const isoValue = iso(time?.getAttribute('datetime') || anchor.getAttribute('datetime'));
-      if (isoValue !== null) isoDates.add(isoValue);
-      if (isoDates.size) return result(isoDates, 'vk-dom-iso');
-      const unixDates = new Set();
-      for (const key of ['data-timestamp', 'data-unixtime', 'data-published-at']) {
-        const value = unix(anchor.getAttribute(key) || time?.getAttribute(key));
-        if (value !== null) unixDates.add(value);
+    count('date_anchors', anchors.length);
+    const isoDates = new Set(), unixDates = new Set();
+    // Responsive copies of the same exact source link may agree. Never pick
+    // the first copy when another copy has a conflicting exact timestamp.
+    for (const anchor of anchors) {
+      // Read every own date value independently: parent attributes must not
+      // hide child conflicts, nor the first <time> hide a later one. A nested
+      // repost's <time> is not evidence for this source, even inside a link.
+      const nodes = [anchor, ...anchor.querySelectorAll('time')]
+        .filter(el => el.closest('[data-testid="post"][data-post-id]') === root);
+      for (const node of nodes) {
+        const isoValue = iso(node.getAttribute('datetime'));
+        if (isoValue !== null) isoDates.add(isoValue);
+        for (const key of ['data-timestamp', 'data-unixtime', 'data-published-at']) {
+          const value = unix(node.getAttribute(key));
+          if (value !== null) unixDates.add(value);
+        }
       }
-      if (unixDates.size) return result(unixDates, 'vk-dom-unix');
     }
+    const dates = new Set([...isoDates, ...unixDates]);
+    count('dom_dates', dates.size);
+    if (dates.size) return result(dates, isoDates.size ? 'vk-dom-iso' : 'vk-dom-unix');
   }
 
   // A page-scoped meta timestamp is safe only when the current route is
@@ -143,7 +167,7 @@ EXACT_DATE_JS = r"""
       if (dates.size) return result(dates, 'vk-meta-iso');
     }
   }
-  return {publishedAt:null, source:'date-unknown', exact:false};
+  return result(new Set(), 'date-unknown');
 }
 """
 

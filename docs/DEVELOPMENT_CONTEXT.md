@@ -1,5 +1,14 @@
 # ПОЛНЫЙ КОНТЕКСТ РАЗРАБОТКИ — VK Unified / VK Bot
 
+1ноября: read-only расход4440=4311worker wall+65alias users.get+64внепачек.
+Причина — максимизация количествапачек при полном64grouprefreshкаждыйраз.
+Подготовлен preferredcount<=floor(weightedactionwork/(2refresh)),min1:
+модель390/36пачек/2766reads вместо390/62/4482, аналитика128reserved отдельно.
+Точная дата: всеinlinecacheassignments, согласованные exactsourceanchors,
+всеownedtimeатрибуты; конфликтfailclosed, anonymouscountdiagnostics.
+DOMjob2245/2353несохранён — причинность/живоеисправлениенедоказаны.
+РаботающийVM3084неостанавливался/необновлялся. См.API_BUDGET_AND_DATES_2026_11_01.md.
+
 30октября17:56:21YEKT: установлен adaptive source911939c после exactgreenLinux/
 Windows/OMSUCI, local1215PASS/0skip/334.001с и source-onlyVM1215/0errors/33Node-
 skip/648.118с. Review3defectsfixed, browser1440/375PASS. Naturalfinish17:55:07,

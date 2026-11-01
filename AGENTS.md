@@ -1,5 +1,17 @@
 # Правила проекта VK Bot / VK Unified
 
+## Экономия повторных чтений —1ноября
+
+- Adaptive preferredcount ограничен полезной работой: floor(weightedactionwork /
+  (2*refreshduration)), минимум1. Затем прежние time/rollingAPIguards. Квоты,
+  полныйfreshallowlistrefreshкаждойпачки и540сек отдыха послеfinish неизменны.
+  Это не фиксированное число/размер и не разрешение stale/partialpool.
+- Exactdateparser учитывает всеinlinecacheassignments и ownedточныеtimeполя;
+  согласованные exactsourceкопии допустимы, противоречияfailclosed. При отсутствии
+  DOMинцидента причинность не заявлять; finalskipдиагностика только boundedcounts.
+- Статус/границы:docs/API_BUDGET_AND_DATES_2026_11_01.md. Не останавливать
+  работающийworker ради этой установки и не смешивать новые файлы сживымпроцессом.
+
 ## Адаптивная очередь — прямой выбор30октября
 
 - Новый режим `schedule_mode=adaptive`: сутки00–24YEKT, не переносить остаток

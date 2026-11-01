@@ -1,5 +1,12 @@
 # Архитектура VK Unified (v6.34)
 
+1ноября: адаптивный planner ограничивает preferredcount объёмом полезнойработы:
+минимум2refreshdurationвдействиях на пачку (кроме малогоостатка), затем прежние
+time/rollingAPIограничения. Это экономит повторныеполныеrefresh, не отменяет их.
+Exactdateparser читает все inlineJSONassignments и все ownedточныеtimeполя;
+согласованные копии разрешены, конфликты блокируются. Naturaldate-skip пишет
+только boundedанонимные счётчики. См.API_BUDGET_AND_DATES_2026_11_01.md.
+
 Адаптивный режим schedule_mode=adaptive: vk_adaptive_planner — чистая оценка
 времени/rollingAPI/остатков; vk_adaptive_metrics — readonly p95 законченных passes
 с запасом; vk_adaptive_state — activation/forecast revisions/immutableclaims и

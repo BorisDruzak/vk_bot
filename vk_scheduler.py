@@ -606,7 +606,7 @@ def run_cli(args,parser):
         state.enabled_provider=accounts.account_enabled
         state.paths_provider=lambda:{n:accounts.database_for_account(n) for n in accounts.account_numbers()}
         state.refresh_policy(utcnow())
-        worker=worker_type(state,engine.DB_PATH,cfg,scan_settings=scan,config_path=args.config)
+        worker=worker_type(state,engine.DB_PATH,cfg,clock=utcnow,scan_settings=scan,config_path=args.config)
         if getattr(args,'scheduler_manual_block',False):
             applied=state.pause('manual_block',kind='manual',now=utcnow())
             print(json.dumps({'applied':applied,'block':state.block_status()},ensure_ascii=False));return 0 if applied else 2

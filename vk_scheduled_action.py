@@ -53,9 +53,10 @@ def prime_action_identity(context,*,deadline=None,before_request=None):
 
 class SourceDateUnavailable(ScheduledActionStopped):
     """Four bounded read windows exhausted; never permission to send again."""
-    def __init__(self):
+    def __init__(self,date_diagnostics=None):
         super().__init__('source_date_unavailable','Точная дата не прочитана после трёх повторов')
         self.read_attempts=4
+        self.date_diagnostics=diagnostics.sanitize_date_summary(date_diagnostics)
 
 
 def source_ready(page,gid,pid,stamp,guard,*,timings=None,before_read=None):
@@ -74,13 +75,22 @@ def source_ready(page,gid,pid,stamp,guard,*,timings=None,before_read=None):
         except (engine.StopRun,PlaywrightError) as exc:
             raise ScheduledActionStopped('source_guard',str(exc)) from exc
     last_error=None
+    date_summary={}
+    read_summary={'read_windows':0,'read_evaluations':0,'read_errors':0,'last_read_error':False}
     for attempt in range(4):
+        read_summary['read_windows']+=1
         deadline=time.monotonic()+9
         while True:
             checked()
-            try:info=groups.exact_post_date_info(page,gid,pid)
+            read_summary['read_evaluations']+=1
+            try:
+                info=groups.exact_post_date_info(page,gid,pid)
+                date_summary=diagnostics.sanitize_date_summary(info.get('date_diagnostics'))
+                read_summary['last_read_error']=False
             except PlaywrightError as exc:
                 # A browser read fault gains no exemption from fresh guards.
+                read_summary['read_errors']+=1
+                read_summary['last_read_error']=True
                 checked();last_error=exc
                 if attempt<3:page.wait_for_timeout(250)
                 break
@@ -94,7 +104,7 @@ def source_ready(page,gid,pid,stamp,guard,*,timings=None,before_read=None):
             if time.monotonic()>=deadline:break
             page.wait_for_timeout(250)
     checked()
-    raise SourceDateUnavailable() from last_error
+    raise SourceDateUnavailable({**date_summary,**read_summary}) from last_error
 
 
 class _SingleBudget:

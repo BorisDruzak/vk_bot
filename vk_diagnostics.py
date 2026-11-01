@@ -58,6 +58,18 @@ def sanitize_observation(value):
     return out
 
 
+def sanitize_date_summary(value):
+    """Only bounded inspection counts, never browser text, identities or URLs."""
+    if not isinstance(value,dict):return {}
+    counts={'live_arrays','inline_assignments','inline_arrays','inline_invalid',
+            'json_post_matches','json_dates','post_roots','date_anchors','dom_dates',
+            'read_windows','read_evaluations','read_errors'}
+    out={key:min(number,65535) for key,number in value.items()
+         if key in counts and type(number) is int and number>=0}
+    if type(value.get('last_read_error')) is bool:out['last_read_error']=value['last_read_error']
+    return out
+
+
 def error_chain(exc):
     out=[];seen=set()
     while exc is not None and id(exc) not in seen and len(out)<4:
@@ -78,6 +90,8 @@ def error_chain(exc):
         if frames:item['frames']=frames[-8:]
         read=read_trace.sanitize_summary(getattr(exc,'read_diagnostics',None))
         if read:item['public_read']=read
+        date=sanitize_date_summary(getattr(exc,'date_diagnostics',None))
+        if date:item['source_date']=date
         out.append(item)
         exc=exc.__cause__ or (None if exc.__suppress_context__ else exc.__context__)
     return out

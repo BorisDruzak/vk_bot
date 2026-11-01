@@ -1,5 +1,11 @@
 # План продолжения VK Unified — v6.34
 
+- [x]1ноября: локально подготовлены экономия повторныхAPIrefresh и исправления
+  exactdateparser с сохранением freshness/guards; подробности
+  [API budget and dates](API_BUDGET_AND_DATES_2026_11_01.md).
+- [ ]Активация исправлений1ноября наВМ и живаяприёмка; работающийworker
+  по прямому требованию пользователя не останавливать ради установки.
+
 - [x]30октября: согласован план adaptivequeue00–24YEKT,540сек отдыха после
   завершения, лимиты попыток включая errors/uncertain; реализованы чистый расчёт,
   метрики, durableclaims/пересчёт, worker и readonlypanel, desktop/mobileQA.
