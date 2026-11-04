@@ -56,7 +56,7 @@ def collect_run(db,run,fetch,*,page_size=100,max_pages=1000):
                 if baseline is not None and baseline!=total:
                     reason='wall_count_changed';break
                 baseline=total
-                dates=[];accepted=[];witnessed=[];invalid=False;new_ids=set();canonical_new=set();bad_reason='invalid_post'
+                dates=[];accepted=[];witnessed=[];invalid=False;new_ids=set();canonical_new=set();bad_reason='invalid_post';owned_upper=previous
                 for item in items:
                     try:
                         if not isinstance(item,dict):raise ValueError('Invalid item')
@@ -71,7 +71,14 @@ def collect_run(db,run,fetch,*,page_size=100,max_pages=1000):
                             raise ValueError('Repeated item')
                         new_ids.add(local_id);canonical_new.add(canonical)
                         witnessed.append(item)
-                        if not item.get('is_pinned'):dates.append(item['date'])
+                        if not item.get('is_pinned'):
+                            if canonical_owner==-gid:
+                                dates.append(item['date']);owned_upper=item['date']
+                            elif owned_upper is not None and item['date']>owned_upper:
+                                invalid=True;bad_reason='ordering_anomaly'
+                            # A coauthor alias can be placed long after its
+                            # original date. It supplies neither a descending
+                            # wall-date bound nor a pagination cutoff.
                         if start<=item['date']<end:accepted.append(item)
                     except ValueError:invalid=True
                 if any(a<b for a,b in zip(dates,dates[1:])) or (dates and previous is not None and dates[0]>previous):

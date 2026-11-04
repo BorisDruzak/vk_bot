@@ -33,10 +33,25 @@ class CollaborationCollectionTests(unittest.TestCase):
         self.assertEqual((row['post_id'],row['likes'],row['views']),(50,1,100))
 
     def test_old_joint_post_proves_boundary_without_stopping_valid_period_posts(self):
-        collect.collect_run(self.db,self.run,lambda *a:dict(count=100,items=[ordinary(1),joint(day='2026-10-01')]),page_size=2)
+        collect.collect_run(self.db,self.run,lambda *a:dict(count=100,items=[ordinary(1),joint(day='2026-10-01'),ordinary(2,'2026-09-30')]),page_size=3)
         row=self.db.execute('SELECT status,reason FROM analytics_run_groups').fetchone()
         self.assertEqual(tuple(row),('complete','date_boundary'))
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM analytics_snapshots').fetchone()[0],1)
+
+    def test_delayed_old_joint_post_is_not_a_boundary_or_owned_order_violation(self):
+        calls=[]
+        def fetch(gid,offset,count):
+            calls.append(offset)
+            return dict(count=4,items=[ordinary(4),joint(day='2026-10-01')] if offset==0
+                        else [ordinary(3,'2026-10-19'),ordinary(2,'2026-10-01')])
+        collect.collect_run(self.db,self.run,fetch,page_size=2)
+        self.assertEqual(calls,[0,2])
+        self.assertEqual(self.db.execute('SELECT status FROM analytics_run_groups').fetchone()[0],'complete')
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM analytics_snapshots').fetchone()[0],2)
+
+    def test_foreign_date_newer_than_preceding_owned_post_stays_partial(self):
+        collect.collect_run(self.db,self.run,lambda *a:dict(count=2,items=[ordinary(1,'2026-10-19'),joint(day='2026-10-20')]))
+        self.assertEqual(self.db.execute('SELECT status FROM analytics_run_groups').fetchone()[0],'partial')
 
     def test_local_joint_id_resolves_historical_reference_without_fake_missing(self):
         store.capture_catalog_references(self.db,self.run,[dict(group_id=1,post_id=50,
