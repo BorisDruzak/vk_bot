@@ -25,8 +25,19 @@ def read_analytics(root,*,run_id=None,week_mode='calendar',include_reposts=True)
         if not run:raise ValueError('Unknown measurement')
         registry=[dict(g) for g in db.execute('SELECT * FROM analytics_run_groups WHERE run_id=? ORDER BY group_id',(run['id'],))]
         snapshots=defaultdict(list)
-        for p in db.execute('SELECT * FROM analytics_snapshots WHERE run_id=? ORDER BY published_at,post_id',(run['id'],)):
+        has_identities=db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='analytics_post_identities'").fetchone() is not None
+        identity_columns=('COALESCE(i.owner_id,-s.group_id) AS canonical_owner_id, '
+                          'COALESCE(i.canonical_post_id,s.post_id) AS canonical_post_id') if has_identities else (
+                          '-s.group_id AS canonical_owner_id, s.post_id AS canonical_post_id')
+        identity_join=(' LEFT JOIN analytics_post_identities i ON i.run_id=s.run_id '
+                       'AND i.group_id=s.group_id AND i.post_id=s.post_id') if has_identities else ''
+        for p in db.execute('SELECT s.*,'+identity_columns+' FROM analytics_snapshots s'+identity_join+
+                            ' WHERE s.run_id=? ORDER BY s.published_at,s.post_id',(run['id'],)):
             snapshots[p['group_id']].append(dict(p))
+        # Resolve district identity and all metadata witnesses within this same
+        # read-only snapshot, using the report's canonical aggregation policy.
+        canonical_report=calc.report(db,run['id'],weeks='period' if week_mode=='period' else 'calendar_full',
+                                     include_reposts=include_reposts)
     start,end=run['period_start'],run['period_end']
     measurement_times={g['group_id']:calc.measurement_timestamp(run,snapshots[g['group_id']],
                        observed_from=g.get('observed_from')) for g in registry}
@@ -39,7 +50,7 @@ def read_analytics(root,*,run_id=None,week_mode='calendar',include_reposts=True)
     else:windows=calc.week_windows(start,end,'calendar_full')
     definitions=[dict(start=a,end_exclusive=b,end=(date.fromisoformat(b)-timedelta(days=1)).isoformat(),
                       closed=calc.stamp(b)<=measured,covered=a>=start and b<=end) for a,b in windows]
-    groups=[];all_rows=[]
+    groups=[]
     for g in registry:
         group_measured=measurement_times[g['group_id']]
         if group_measured is None:group_measured=float('-inf')
@@ -57,20 +68,22 @@ def read_analytics(root,*,run_id=None,week_mode='calendar',include_reposts=True)
             elif not w['covered'] or g['status']!='complete':status='unknown'
             else:status='failed'
             weeks.append(dict(**w,posts=n,status=status))
-        if g['included']:all_rows.extend(selected)
         posts=[dict(post_id=p['post_id'],published_at=p['published_at'],measured_at=p['measured_at'],
-                    status=p['status'],is_repost=bool(p['is_repost']),url=f"https://vk.com/wall-{g['group_id']}_{p['post_id']}") for p in selected]
+                    status=p['status'],is_repost=bool(p['is_repost']),canonical_owner_id=p['canonical_owner_id'],
+                    canonical_post_id=p['canonical_post_id'],
+                    url=f"https://vk.com/wall{p['canonical_owner_id']}_{p['canonical_post_id']}") for p in selected]
         groups.append(dict(group_id=g['group_id'],name=g['name'],included=bool(g['included']),business_card=bool(g['business_card']),
                            archive_status=g['status'],archive_reason=g['reason'],**stats,observed_er=observed_er,
                            observed_p33=observed_p33,weeks=weeks,failed_weeks=[w for w in weeks if w['status']=='failed'],publications=posts))
     included=[g for g in groups if g['included']]
-    district=calc._aggregate(all_rows,bool(included) and calc.stamp(end)<=measured and all(g['archive_status']=='complete' for g in included))
-    district['observed_er'],district['observed_p33']=calc.engagement(*(sum(p[k] for p in all_rows if p['status']=='complete') for k in ('likes','comments','reposts','views')))
-    district['communities']=len(included)
+    district=dict(canonical_report['district'])
+    district['observed_er']=district['diagnostic_complete_post_subset_er']
+    district['observed_p33']=min(100.0,district['observed_er']/3.6*100) if district['observed_er'] is not None else None
     weekly=[]
     for i,w in enumerate(definitions):
         eligible=[g for g in included if not g['business_card']]
         counts={status:sum(g['weeks'][i]['status']==status for g in eligible) for status in ('met','failed','open','unknown')}
-        weekly.append(dict(**w,**counts,eligible=len(eligible),p32=counts['met']/len(eligible)*100 if eligible and w['closed'] and not(counts['open'] or counts['unknown']) else None))
+        weekly.append(dict(**w,**counts,eligible=len(eligible),p32=counts['met']/len(eligible)*100 if eligible and w['closed']
+                           and not district['canonical_date_conflicts'] and not(counts['open'] or counts['unknown']) else None))
     return dict(run=run,runs=runs,groups=groups,district=district,weekly_summary=weekly,week_mode=week_mode,
                 include_reposts=include_reposts,generated_at=datetime.now(timezone.utc).isoformat())
