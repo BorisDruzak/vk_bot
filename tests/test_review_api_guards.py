@@ -61,6 +61,7 @@ class PublicChallengeTests(unittest.TestCase):
                                 reader = LiveReader.__new__(LiveReader)
                                 reader.root, reader.path, reader.token = root, path, 'synthetic'
                                 reader.used, reader.max_requests, reader.before_request = 0, 2, None
+                                reader.wall_filter, reader.use_cache = 'owner', True
                                 reader._call(101, 'wall.get', {'count':100, 'offset':0})
                         self.assertIsInstance(caught.exception, api.VkApiLimited)
                         with closing(engine.db_open(path)) as db:

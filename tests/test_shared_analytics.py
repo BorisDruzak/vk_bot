@@ -79,14 +79,59 @@ class SharedAnalyticsTests(unittest.TestCase):
         self.assertEqual([tuple(row) for row in rows],
                          [(1, '2026-10-23T03:00:00+00:00', 9), (2, '2026-10-22T07:00:00+00:00', 3)])
 
-    def live(self):
+    def live(self, **kwargs):
         ledger = engine.db_open(self.root/'vk_batch.sqlite3'); ledger.close()
         (self.root/'.vk-analytics-runtime.json').write_text(json.dumps(dict(machine=socket.gethostname(), root=str(self.root))), encoding='utf8')
         stack = ExitStack()
         stack.enter_context(patch.object(collect, '__file__', str(self.root/'vk_analytics_collect.py')))
         stack.enter_context(patch.object(api, 'configured_token', return_value='dummy-test-token'))
         self.addCleanup(stack.close)
-        return collect.LiveReader(self.root, max_requests=1)
+        return collect.LiveReader(self.root, max_requests=1, **kwargs)
+
+    def test_alternative_filter_never_reads_or_replaces_owner_cache(self):
+        owner = self.live()
+        audit = self.live()
+        audit.wall_filter = 'all'
+        audit.use_cache = True
+        self.activate_shared()
+        filters = []
+        def network(data):
+            filters.append(data['filter'])
+            return 200, dict(response=dict(count=1, items=[post(2 if data['filter']=='all' else 1)]))
+        with patch.object(api, '_default_transport', side_effect=network), patch.object(api.time, 'sleep'):
+            owner.wall_get(1, 0, 100)
+            result = audit.wall_get(1, 0, 100)
+            cached = owner.wall_get(1, 0, 100)
+        self.assertEqual(result['items'][0]['id'], 2)
+        self.assertEqual(cached['items'][0]['id'], 1)
+        self.assertTrue(cached['_cache_hit'])
+        self.assertEqual(filters, ['owner', 'all'])
+        self.assertEqual(audit.used, 1)
+        with closing(sqlite3.connect(self.root/'vk_batch.sqlite3')) as ledger:
+            self.assertEqual(ledger.execute('SELECT COUNT(*) FROM api_read_attempts').fetchone()[0], 2)
+            self.assertEqual(ledger.execute('SELECT COUNT(*) FROM action_attempts').fetchone()[0], 0)
+
+    def test_owner_audit_can_disable_cache_without_replacing_shared_page(self):
+        owner = self.live()
+        audit = self.live()
+        audit.use_cache = False
+        self.activate_shared()
+        with patch.object(api, '_default_transport', side_effect=[
+                (200, dict(response=dict(count=1, items=[post(1)]))),
+                (200, dict(response=dict(count=1, items=[post(2)])))]), patch.object(api.time, 'sleep'):
+            owner.wall_get(1, 0, 100)
+            result = audit.wall_get(1, 0, 100)
+            cached = owner.wall_get(1, 0, 100)
+        self.assertEqual(result['items'][0]['id'], 2)
+        self.assertEqual(cached['items'][0]['id'], 1)
+        self.assertEqual(audit.used, 1)
+
+    def test_wall_audit_policy_validated_before_credentials(self):
+        with patch.object(api, 'configured_token') as token:
+            for kwargs in ({'wall_filter':'bad'}, {'wall_filter':True}, {'use_cache':1}):
+                with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                    collect.LiveReader(self.root, **kwargs)
+        token.assert_not_called()
 
     def test_continuation_rejects_page_older_than_its_head_and_resets_at_head(self):
         reader = self.live()

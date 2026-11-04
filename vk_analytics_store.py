@@ -8,7 +8,7 @@ import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-RULES_VERSION='omsu-111-2026-09-14/v1.1'
+RULES_VERSION='omsu-111-2026-09-14/v1.2'
 COUNTERS=('likes','comments','reposts','views')
 
 
@@ -79,6 +79,15 @@ def open_db(path):
       run_id TEXT NOT NULL REFERENCES analytics_runs(id),group_id INTEGER NOT NULL,
       post_id INTEGER NOT NULL,published_at INTEGER NOT NULL,seen_at TEXT NOT NULL,
       source TEXT NOT NULL,PRIMARY KEY(run_id,group_id,post_id));
+    CREATE TABLE IF NOT EXISTS analytics_post_identities(
+      run_id TEXT NOT NULL REFERENCES analytics_runs(id),group_id INTEGER NOT NULL,
+      post_id INTEGER NOT NULL,owner_id INTEGER NOT NULL,canonical_post_id INTEGER NOT NULL,
+      proof TEXT NOT NULL,PRIMARY KEY(run_id,group_id,post_id));
+    CREATE TABLE IF NOT EXISTS analytics_identity_witnesses(
+      run_id TEXT NOT NULL REFERENCES analytics_runs(id),group_id INTEGER NOT NULL,
+      post_id INTEGER NOT NULL,owner_id INTEGER NOT NULL,canonical_post_id INTEGER NOT NULL,
+      published_at INTEGER NOT NULL,observed_at TEXT NOT NULL,
+      PRIMARY KEY(run_id,group_id,post_id,owner_id,canonical_post_id,published_at));
     ''')
     columns={r[1] for r in db.execute('PRAGMA table_info(analytics_run_groups)')}
     if 'expected_count' not in columns:
@@ -147,27 +156,100 @@ def capture_catalog_references(db,run,references):
 
 def record_missing(db,run,p,source,*,status='not_returned'):
     """Unavailable historical post: retain unknown type/pin/counters honestly."""
+    identities=db.execute('''SELECT i.owner_id,i.canonical_post_id,i.proof FROM analytics_post_identities i
+      JOIN analytics_runs prior ON prior.id=i.run_id JOIN analytics_runs current ON current.id=?
+      WHERE i.group_id=? AND i.post_id=? AND (i.run_id=? OR prior.started_at<=current.started_at)''',
+      (run,p['group_id'],p['post_id'],run)).fetchall()
+    mappings=set()
+    for identity in identities:
+        owner,pid,proof=identity
+        if (type(owner) is not int or not 0<abs(owner)<2**63 or type(pid) is not int or not 0<pid<2**63
+            or proof not in ('owner','coowner','historical_owner','historical_coowner')
+            or (proof in ('owner','historical_owner') and (owner!=-p['group_id'] or pid!=p['post_id']))
+            or (proof in ('coowner','historical_coowner') and owner==-p['group_id'])):
+            raise ValueError('Invalid historical canonical identity')
+        mappings.add((owner,pid))
+    if len(mappings)>1:raise ValueError('Conflicting historical canonical identities')
+    if mappings:
+        owner,pid=next(iter(mappings))
+        db.execute('INSERT OR IGNORE INTO analytics_post_identities VALUES(?,?,?,?,?,?)',
+                   (run,p['group_id'],p['post_id'],owner,pid,
+                    'historical_owner' if owner==-p['group_id'] else 'historical_coowner'))
     db.execute('''INSERT OR IGNORE INTO analytics_snapshots(run_id,group_id,post_id,measured_at,
       likes,comments,reposts,views,source,status,published_at,post_type,is_pinned,is_repost)
       VALUES(?,?,?,?,NULL,NULL,NULL,NULL,?,?,?,?,?,?)''',
       (run,p['group_id'],p['post_id'],now(),source,status,p['published_at'],p['post_type'],p['is_pinned'],p['is_repost']))
 
 
+def post_identity(gid,item):
+    """Resolve an exact local alias only from the observed coowner witness."""
+    def positive(value):return type(value) is int and 0<value<2**63
+    def owner(value):return type(value) is int and 0<abs(value)<2**63
+    if (not positive(gid) or not isinstance(item,dict)
+        or not owner(item.get('owner_id')) or not positive(item.get('id'))):
+        raise ValueError('Invalid public post identity')
+    canonical_owner,canonical_pid=item['owner_id'],item['id']
+    if canonical_owner==-gid:return canonical_pid,canonical_owner,canonical_pid
+    coowners=item.get('coowners')
+    allowed={'coowner_post_id','list','requests','is_owner','is_coowner'}
+    if (type(coowners) is not dict or set(coowners)-allowed
+        or any(key in coowners and type(coowners[key]) is not bool for key in ('is_owner','is_coowner'))
+        or any(type(item.get(key)) is not str or item[key]!=value for key,value in
+               (('inner_type','wall_wallpost'),('type','post'),('post_type','post')))):
+        raise ValueError('Invalid coowner identity witness')
+    mapping=coowners.get('coowner_post_id');members=coowners.get('list');requests=coowners.get('requests')
+    if (type(mapping) is not dict or set(mapping)!={'owner_id','post_id'}
+        or type(mapping['owner_id']) is not int or mapping['owner_id']!=-gid
+        or not positive(mapping['post_id']) or type(members) is not list or not 2<=len(members)<=5
+        or type(requests) is not list or requests):
+        raise ValueError('Invalid coowner local mapping')
+    member_ids=[];member_flags={'is_current_user','can_subscribe','is_subscribed'}
+    for member in members:
+        if (type(member) is not dict or set(member)-({'owner_id'}|member_flags)
+            or not owner(member.get('owner_id'))
+            or any(key in member and type(member[key]) is not bool for key in member_flags)):
+            raise ValueError('Invalid coowner member witness')
+        member_ids.append(member['owner_id'])
+    if len(set(member_ids))!=len(member_ids) or not {-gid,canonical_owner}<=set(member_ids):
+        raise ValueError('Conflicting coowner members')
+    return mapping['post_id'],canonical_owner,canonical_pid
+
+
+def record_identity_witness(db,run,gid,item,at):
+    """Keep exact metadata witnesses, including dates outside the run period."""
+    pid,canonical_owner,canonical_pid=post_identity(gid,item)
+    if (type(item.get('date')) is not int or not 0<item['date']<2**63
+        or item['date']>int(datetime.now(timezone.utc).timestamp())+3600
+        or type(item.get('is_pinned',0)) not in (int,bool) or item.get('is_pinned',0) not in (0,1)
+        or (item.get('post_type') is not None and (not isinstance(item['post_type'],str) or len(item['post_type'])>40))):
+        raise ValueError('Invalid identity witness metadata')
+    try:observed=datetime.fromisoformat(at) if type(at) is str else None
+    except ValueError:raise ValueError('Invalid identity witness observation time') from None
+    if observed is None or observed.tzinfo is None or observed.utcoffset() is None:
+        raise ValueError('Invalid identity witness observation time')
+    db.execute('INSERT OR IGNORE INTO analytics_identity_witnesses VALUES(?,?,?,?,?,?,?)',
+               (run,gid,pid,canonical_owner,canonical_pid,item['date'],at))
+
+
 def observe(db,run,gid,item,source,*,status=None,at=None):
-    if (not isinstance(item,dict) or type(item.get('owner_id')) is not int or item['owner_id']!=-gid
-        or type(item.get('id')) is not int or not 0<item['id']<2**63
-        or type(item.get('date')) is not int or not 0<item['date']<2**63
+    pid,canonical_owner,canonical_pid=post_identity(gid,item)
+    if (type(item.get('date')) is not int or not 0<item['date']<2**63
         or item['date']>int(datetime.now(timezone.utc).timestamp())+3600
         or type(item.get('is_pinned',0)) not in (int,bool) or item.get('is_pinned',0) not in (0,1)):
         raise ValueError('Invalid public post identity/date/pinned flag')
     counts=[counter(item,k) for k in COUNTERS]
     status=status or ('complete' if all(v is not None for v in counts) else 'missing_counters')
     if status!='complete' and status!='missing_counters':counts=[None]*4
-    pid=item['id'];published=item['date'];kind=item.get('post_type');pin=int(item.get('is_pinned',0))
+    published=item['date'];kind=item.get('post_type');pin=int(item.get('is_pinned',0))
     if kind is not None and (not isinstance(kind,str) or len(kind)>40):raise ValueError('Invalid post type')
     copied=int(bool(item.get('copy_history')) or kind=='copy')
+    conflict=db.execute('''SELECT 1 FROM analytics_post_identities WHERE group_id=? AND post_id=?
+      AND (owner_id<>? OR canonical_post_id<>?) LIMIT 1''',(gid,pid,canonical_owner,canonical_pid)).fetchone()
+    if conflict:raise ValueError('Conflicting canonical post identity')
+    db.execute('INSERT OR IGNORE INTO analytics_post_identities VALUES(?,?,?,?,?,?)',
+               (run,gid,pid,canonical_owner,canonical_pid,'owner' if canonical_owner==-gid else 'coowner'))
     db.execute('INSERT OR IGNORE INTO analytics_publications VALUES(?,?,?,?,?,?,?,?,?)',
-        (gid,pid,published,f'https://vk.com/wall-{gid}_{pid}',kind,pin,copied,source,
+        (gid,pid,published,f'https://vk.com/wall{canonical_owner}_{canonical_pid}',kind,pin,copied,source,
          'available' if status in ('complete','missing_counters') else status))
     db.execute('''INSERT OR IGNORE INTO analytics_snapshots(run_id,group_id,post_id,measured_at,
       likes,comments,reposts,views,source,status,published_at,post_type,is_pinned,is_repost)

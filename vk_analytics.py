@@ -79,6 +79,22 @@ def _aggregate(rows,archive_complete):
                 diagnostic_complete_post_subset_er=subset[0],complete_counter_posts=len(common))
 
 
+def _canonical_publications(rows):
+    """One whole latest observation per actual post, never per-wall totals."""
+    latest={};dates={}
+    def order(row):
+        try:
+            measured=datetime.fromisoformat(row['measured_at'])
+            instant=measured.timestamp() if measured.tzinfo is not None and measured.utcoffset() is not None else float('-inf')
+        except (ValueError,TypeError,OverflowError):instant=float('-inf')
+        return instant,row['group_id'],row['post_id']
+    for row in rows:
+        key=(row['canonical_owner_id'],row['canonical_post_id'])
+        dates.setdefault(key,set()).add(row['published_at'])
+        if key not in latest or order(row)>order(latest[key]):latest[key]=row
+    return list(latest.values()),sum(len(values)>1 for values in dates.values())
+
+
 def p31_penalty(ratio):
     if ratio is None:return None
     if not 0<=ratio<=1:raise ValueError('P3.1 compliance ratio must be 0..1')
@@ -92,11 +108,19 @@ def p31_penalty(ratio):
 def report(db,run,*,weeks='calendar_clip',include_reposts=True,p31_ratio=None):
     row=db.execute('SELECT * FROM analytics_runs WHERE id=?',(run,)).fetchone()
     if row is None:raise ValueError('Unknown analytics run')
-    start,end=row['period_start'],row['period_end'];groups=[];all_rows=[];archive_coverage=[]
+    start,end=row['period_start'],row['period_end'];groups=[];all_rows=[];identity_rows=[];archive_coverage=[]
+    has_identities=db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='analytics_post_identities'").fetchone() is not None
+    identity_columns=('COALESCE(i.owner_id,-s.group_id) AS canonical_owner_id, '
+                      'COALESCE(i.canonical_post_id,s.post_id) AS canonical_post_id') if has_identities else (
+                      '-s.group_id AS canonical_owner_id, s.post_id AS canonical_post_id')
+    identity_join=(' LEFT JOIN analytics_post_identities i ON i.run_id=s.run_id '
+                   'AND i.group_id=s.group_id AND i.post_id=s.post_id') if has_identities else ''
     registry=[dict(r) for r in db.execute('SELECT * FROM analytics_run_groups WHERE run_id=? ORDER BY group_id',(run,))]
     for g in registry:
         if not g['included']:continue
-        snapshots=[dict(s) for s in db.execute('SELECT * FROM analytics_snapshots WHERE run_id=? AND group_id=? ORDER BY published_at,post_id',(run,g['group_id']))]
+        snapshots=[dict(s) for s in db.execute('SELECT s.*,'+identity_columns+' FROM analytics_snapshots s'+identity_join+
+                   ' WHERE s.run_id=? AND s.group_id=? ORDER BY s.published_at,s.post_id',(run,g['group_id']))]
+        identity_rows.extend(s for s in snapshots if include_reposts or not s['is_repost'])
         measured=measurement_timestamp(row,snapshots,observed_from=g.get('observed_from'))
         period_elapsed=measured is not None and stamp(end)<=measured
         archive_coverage.append(g['status']=='complete' and period_elapsed)
@@ -112,10 +136,26 @@ def report(db,run,*,weeks='calendar_clip',include_reposts=True,p31_ratio=None):
                            archive_status=g['status'],archive_reason=g['reason'],**stats,regularity=reg,
                            measured_from=min((s['measured_at'] for s in usable),default=None),
                            measured_to=max((s['measured_at'] for s in usable),default=None)))
-    district=_aggregate(all_rows,bool(groups) and all(archive_coverage))
+    canonical_rows,_=_canonical_publications(all_rows)
+    if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='analytics_identity_witnesses'").fetchone():
+        identity_rows.extend(dict(w) for w in db.execute('''SELECT w.owner_id AS canonical_owner_id,
+          w.canonical_post_id,w.published_at FROM analytics_identity_witnesses w
+          JOIN analytics_run_groups g ON g.run_id=w.run_id AND g.group_id=w.group_id
+          WHERE w.run_id=? AND g.included=1''',(run,)))
+    # Retain out-of-period API witnesses for identities actually reported here.
+    # Their absence from the counter snapshots must not hide a date conflict.
+    canonical_dates={(s['canonical_owner_id'],s['canonical_post_id']):set() for s in canonical_rows}
+    for witness in identity_rows:
+        key=(witness['canonical_owner_id'],witness['canonical_post_id'])
+        if key in canonical_dates:canonical_dates[key].add(witness['published_at'])
+    canonical_date_conflicts=sum(len(values)>1 for values in canonical_dates.values())
+    district=_aggregate(canonical_rows,bool(groups) and all(archive_coverage) and not canonical_date_conflicts)
+    district.update(wall_publications=len(all_rows),shared_publication_duplicates=len(all_rows)-len(canonical_rows),
+                    canonical_date_conflicts=canonical_date_conflicts,
+                    aggregation_policy='unique_canonical_post_latest_snapshot')
     eligible=[g for g in groups if not g['business_card']]
     passed=sum(g['regularity']['passed'] is True for g in eligible)
-    p32=min(100.0,passed/len(eligible)*100) if eligible and all(g['regularity']['passed'] is not None for g in eligible) else None
+    p32=min(100.0,passed/len(eligible)*100) if eligible and not canonical_date_conflicts and all(g['regularity']['passed'] is not None for g in eligible) else None
     known_er=[g['er'] for g in groups if g['er'] is not None]
     mean=sum(known_er)/len(known_er) if known_er else None
     district.update(p32=p32,p32_passed=passed,p32_eligible=len(eligible),communities=len(groups),
@@ -135,6 +175,7 @@ def report(db,run,*,weeks='calendar_clip',include_reposts=True,p31_ratio=None):
                          'Счётчики накоплены к моменту API-чтения у постов, опубликованных в периоде; это не приращение за период.',
                          'Нет исторических снимков на прежнюю дату — нельзя восстановить прежние счётчики.',
                          'Число постов — известный минимум; исчезнувшие записи из прежнего API-каталога дают partial и NULL.',
+                         'Район учитывает каждый канонический пост один раз по целому последнему снимку; статистика сообществ сохраняет размещения на каждой стене.',
                          'Неполный архив или NULL не дают окончательного ER. V — views.count, не охват.',
                          'calendar_full требует данных вне периода: без них регулярность UNKNOWN.'])
 

@@ -9,6 +9,7 @@ import os
 import socket
 import ssl
 import sys
+import time
 import uuid
 from contextlib import closing
 from datetime import datetime,timedelta,timezone
@@ -57,13 +58,19 @@ def read_selection(manifest_path,registry_path):
 
 
 def export_posts(db,run,out):
-    rows=db.execute('''SELECT s.*,p.url FROM analytics_snapshots s JOIN analytics_publications p
-       ON p.group_id=s.group_id AND p.post_id=s.post_id WHERE s.run_id=? ORDER BY s.group_id,s.post_id''',(run,))
+    rows=db.execute('''SELECT s.*,p.url,
+       COALESCE(i.owner_id,-s.group_id) AS canonical_owner_id,
+       COALESCE(i.canonical_post_id,s.post_id) AS canonical_post_id,
+       'https://vk.com/wall'||COALESCE(i.owner_id,-s.group_id)||'_'||COALESCE(i.canonical_post_id,s.post_id) AS canonical_url
+       FROM analytics_snapshots s JOIN analytics_publications p
+       ON p.group_id=s.group_id AND p.post_id=s.post_id
+       LEFT JOIN analytics_post_identities i ON i.run_id=s.run_id AND i.group_id=s.group_id AND i.post_id=s.post_id
+       WHERE s.run_id=? ORDER BY s.group_id,s.post_id''',(run,))
     with (out/'posts.csv').open('w',encoding='utf-8-sig',newline='') as stream:
         writer=csv.writer(stream,delimiter=';');writer.writerow([x[0] for x in rows.description]);writer.writerows(rows)
 
 
-def _run_locked(root,manifest_path,registry_path,slot,clock,reader_factory):
+def _run_locked(root,manifest_path,registry_path,slot,clock,reader_factory,sleeper):
     manifest,groups=read_selection(manifest_path,registry_path)
     out=root/'analytics_local'/'observation-from-2026-10-14'/'scheduled'/slot['key']
     out.mkdir(parents=True,exist_ok=True);checkpoint=out/'checkpoint.json'
@@ -109,7 +116,16 @@ def _run_locked(root,manifest_path,registry_path,slot,clock,reader_factory):
                     stop='deferred_budget';raise Deferred('budget')
                 # Reserve against the slot budget before a possible crash.
                 state['attempted_reads']+=1;atomic_json(checkpoint,state)
-                return reader.wall_get(gid,offset,count)
+                while True:
+                    deadline_guard()
+                    try:return reader.wall_get(gid,offset,count)
+                    except Deferred as exc:
+                        if type(exc) is not Deferred or exc.args!=('worker_or_profile_busy',):raise
+                        # LiveReader has released its leases without sending a
+                        # request. Wait for this same page under its reservation;
+                        # no read errors or deadline deferrals may enter this loop.
+                        remaining=(datetime.fromisoformat(state['deadline'])-clock()).total_seconds()
+                        if remaining>0:sleeper(min(5,remaining))
             # Match queue/statistics page identity for shared observations.
             collect_run(db,rid,fetch,page_size=100)
             reasons=[r[0] for r in db.execute('SELECT reason FROM analytics_run_groups WHERE run_id=?',(rid,)) if r[0]]
@@ -132,14 +148,14 @@ def _run_locked(root,manifest_path,registry_path,slot,clock,reader_factory):
         return result
 
 
-def run_job(root,manifest_path,registry_path,*,clock=utcnow,reader_factory=LiveReader):
+def run_job(root,manifest_path,registry_path,*,clock=utcnow,reader_factory=LiveReader,sleeper=time.sleep):
     root=Path(root);slot=select_slot(clock())
     if slot is None:return dict(status='skipped_outside_slot')
     from vk_scheduler import singleton
     from vk_unified import RunAlreadyActive
     try:
         with singleton(root/'.vk-analytics.guard'):
-            return _run_locked(root,manifest_path,registry_path,slot,clock,reader_factory)
+            return _run_locked(root,manifest_path,registry_path,slot,clock,reader_factory,sleeper)
     except RunAlreadyActive:return dict(status='skipped_analytics_busy')
 
 

@@ -42,7 +42,7 @@ def collect_run(db,run,fetch,*,page_size=100,max_pages=1000):
     start,end=stamp(record['period_start']),stamp(record['period_end'])
     for g in db.execute('SELECT * FROM analytics_run_groups WHERE run_id=? AND included=1 ORDER BY group_id',(run,)).fetchall():
         if g['status']=='complete':continue
-        gid=g['group_id'];offset=0;baseline=g['expected_count'];previous=None;seen=set();reason='page_limit';status='partial';pages=0
+        gid=g['group_id'];offset=0;baseline=g['expected_count'];previous=None;seen=set();canonical_seen=set();reason='page_limit';status='partial';pages=0
         observed_from=g['observed_from']
         # Offset checkpoints are diagnostic only. Resume unfinished communities
         # from head so new insertions cannot silently skip records after a crash.
@@ -56,19 +56,21 @@ def collect_run(db,run,fetch,*,page_size=100,max_pages=1000):
                 if baseline is not None and baseline!=total:
                     reason='wall_count_changed';break
                 baseline=total
-                dates=[];accepted=[];invalid=False;new_ids=set();bad_reason='invalid_post'
+                dates=[];accepted=[];witnessed=[];invalid=False;new_ids=set();canonical_new=set();bad_reason='invalid_post'
                 for item in items:
                     try:
                         if not isinstance(item,dict):raise ValueError('Invalid item')
+                        local_id,canonical_owner,canonical_id=store.post_identity(gid,item)
+                        canonical=(canonical_owner,canonical_id)
                         # Validate metadata without saving out-of-period posts.
-                        if (type(item.get('owner_id')) is not int or item['owner_id']!=-gid
-                            or type(item.get('id')) is not int or not 0<item['id']<2**63
-                            or type(item.get('date')) is not int or not 0<item['date']<=int(time.time())+3600
+                        if (type(item.get('date')) is not int or not 0<item['date']<=int(time.time())+3600
                             or type(item.get('is_pinned',0)) not in (int,bool) or item.get('is_pinned',0) not in (0,1)):
                             raise ValueError('Invalid item')
-                        if item['id'] in new_ids or (item['id'] in seen and not item.get('is_pinned')):
+                        if (local_id in new_ids or canonical in canonical_new
+                            or ((local_id in seen or canonical in canonical_seen) and not item.get('is_pinned'))):
                             raise ValueError('Repeated item')
-                        new_ids.add(item['id'])
+                        new_ids.add(local_id);canonical_new.add(canonical)
+                        witnessed.append(item)
                         if not item.get('is_pinned'):dates.append(item['date'])
                         if start<=item['date']<end:accepted.append(item)
                     except ValueError:invalid=True
@@ -76,6 +78,9 @@ def collect_run(db,run,fetch,*,page_size=100,max_pages=1000):
                     invalid=True;bad_reason='ordering_anomaly'
                 # Every committed page, snapshots and cursor move atomically.
                 with db:
+                    # Metadata outside the period can still contradict the date
+                    # of a canonical post inside it; preserve the exact witness.
+                    for item in witnessed:store.record_identity_witness(db,run,gid,item,at=at)
                     for item in accepted:store.observe(db,run,gid,item,'wall.get',at=at)
                     pages+=1;offset+=len(items)
                     # Preserve coverage even when the page has no period posts.
@@ -86,69 +91,12 @@ def collect_run(db,run,fetch,*,page_size=100,max_pages=1000):
                     db.execute('''UPDATE analytics_runs SET status='running',finished_at=NULL,
                       groups_checked=(SELECT COUNT(*) FROM analytics_run_groups WHERE run_id=? AND included=1 AND pages>0),
                       posts_received=(SELECT COUNT(*) FROM analytics_snapshots WHERE run_id=?) WHERE id=?''',(run,run,run))
-                if invalid:
-                    reason=bad_reason
-                    safe=[{k:p.get(k) if type(p.get(k)) in (int,bool) else None for k in ('id','owner_id','date','is_pinned')}
-                          for p in items if isinstance(p,dict)]
-                    with db:db.execute('INSERT INTO analytics_page_diagnostics(run_id,group_id,observed_at,offset,code,metadata) VALUES(?,?,?,?,?,?)',
-                        (run,gid,at,offset-len(items),reason,store.dumps(safe)))
-                    break
-                if items and not (new_ids-seen):reason='repeated_page';break
-                seen.update(new_ids)
-                if dates:previous=dates[-1]
-                if (dates and dates[-1]<start) or offset>=total:
-                    status='complete';reason='date_boundary' if dates and dates[-1]<start else 'wall_exhausted';break
-                if len(items)<page_size:reason='unexpected_short_page';break
-        except Deferred:
-            reason='worker_or_profile_busy';status='deferred'
-        except Exception as exc:
-            code=getattr(exc,'code',None)
-            reason=f'api_code_{code}' if type(code) is int else 'read_'+type(exc).__name__
-            # Never store exception messages: transport can include credentials.
-            with db:_error(db,run,gid,reason)
-            # An access-denied community may be skipped, global limits/auth never.
-            if code!=7:
-                with db:db.execute('UPDATE analytics_run_groups SET status=?,reason=? WHERE run_id=? AND group_id=?',('partial',reason,run,gid))
-                store.finish(db,run)
-                return
-        with db:
-            if status=='complete':
-                prior={r[0] for r in db.execute('SELECT post_id FROM analytics_snapshots WHERE run_id=? AND group_id=?',(run,gid))}
-                if prior-seen:status='partial';reason='resumed_archive_disagrees'
-            if status=='complete':
-                refs=db.execute('''SELECT r.* FROM analytics_catalog_references r WHERE run_id=? AND group_id=?
-                  AND NOT EXISTS(SELECT 1 FROM analytics_snapshots s WHERE s.run_id=r.run_id
-                    AND s.group_id=r.group_id AND s.post_id=r.post_id)''',(run,gid)).fetchall()
-                for ref in refs:
-                    db.execute('INSERT OR IGNORE INTO analytics_publications VALUES(?,?,?,?,?,?,?,?,?)',
-                        (gid,ref['post_id'],ref['published_at'],f"https://vk.com/wall-{gid}_{ref['post_id']}",
-                         None,None,0,ref['source'],'historical_reference'))
-                # Known posts absent from a now-complete archive cannot disappear
-                # silently from a later report. Absence does not prove deletion.
-                missing=db.execute('''SELECT * FROM analytics_publications p WHERE group_id=?
-                   AND published_at>=? AND published_at<? AND NOT EXISTS(SELECT 1 FROM analytics_snapshots s
-                     WHERE s.run_id=? AND s.group_id=p.group_id AND s.post_id=p.post_id)''',(gid,start,end,run)).fetchall()
-                for p in missing:
-                    catalog_ref=next((ref for ref in refs if ref['post_id']==p['post_id']),None)
-                    store.record_missing(db,run,p,'wall.get',status='historical_not_returned' if catalog_ref else 'not_returned')
-                if missing:status='partial';reason='historical_posts_not_returned'
-                conflict=db.execute('''SELECT 1 FROM analytics_catalog_references r
-                   LEFT JOIN analytics_snapshots s ON s.run_id=r.run_id AND s.group_id=r.group_id AND s.post_id=r.post_id
-                   LEFT JOIN analytics_publications p ON p.group_id=r.group_id AND p.post_id=r.post_id
-                   WHERE r.run_id=? AND r.group_id=? AND
-                     (r.published_at<>s.published_at OR r.published_at<>p.published_at) LIMIT 1''',(run,gid)).fetchone()
-                if conflict:status='partial';reason='catalog_date_conflict'
-            db.execute('UPDATE analytics_run_groups SET status=?,reason=? WHERE run_id=? AND group_id=?',(status,reason,run,gid))
-            if status not in ('complete','deferred'):_error(db,run,gid,reason)
-        print(json.dumps(dict(group_id=gid,status=status,pages=pages,reason=reason)),flush=True)
-        if reason=='worker_or_profile_busy':break
-    store.finish(db,run)
-
-
-class LiveReader:
-    """VM-only caller; reuses existing ledger/pacing/locks, never browser/actions."""
-    def __init__(self,root,*,max_requests=500,before_request=None):
+            …1112 tokens truncated…"VM-only caller; reuses existing ledger/pacing/locks, never browser/actions."""
+    def __init__(self,root,*,max_requests=500,before_request=None,wall_filter='owner',use_cache=True):
         import vk_api_read as api
+        if type(wall_filter) is not str or wall_filter not in ('owner','all','others') or type(use_cache) is not bool:
+            raise ValueError('Invalid wall read policy')
+        self.wall_filter,self.use_cache=wall_filter,use_cache
         self.root=Path(root).resolve();self.used=0;self.max_requests=max_requests;self.before_request=before_request
         self._head_observed_at={}
         binding=self.root/'.vk-analytics-runtime.json'
@@ -168,13 +116,16 @@ class LiveReader:
         import vk_accounts as accounts
         import vk_api_read as api
         import vk_unified as app
+        if type(self.wall_filter) is not str or self.wall_filter not in ('owner','all','others') or type(self.use_cache) is not bool:
+            raise ValueError('Invalid wall read policy')
+        cache_wall=method=='wall.get' and self.wall_filter=='owner' and self.use_cache
         try:
             with accounts.exclusive_activity(self.root),app.exclusive_run(self.root/'.vk-unified-running.lock'),closing(sqlite3.connect(self.path,timeout=5)) as ledger:
                 ledger.row_factory=sqlite3.Row
                 # A cached page must obey the scheduled deadline as well.
                 if self.before_request:self.before_request()
                 # API client records 429/rate lock durably in the existing ledger.
-                original=api._default_transport if method=='wall.get' else lambda data:self._byid_transport(data,params)
+                original=(lambda data:api._default_transport({**data,'filter':self.wall_filter})) if method=='wall.get' else lambda data:self._byid_transport(data,params)
                 network_calls=0
                 def before_network():
                     if self.before_request:self.before_request()
@@ -184,9 +135,9 @@ class LiveReader:
                     network_calls+=1
                     return original(data)
                 client=api.VKReadClient(ledger,self.token,pause_seconds=5,per_run=1,per_24h=5000,transport=transport,
-                                        shared_path=None if method=='wall.get' else False,fresh_after=fresh_after,
+                                        shared_path=None if cache_wall else False,fresh_after=fresh_after,
                                         before_request=before_network)
-                if self.used>=self.max_requests and (method!='wall.get' or not client.has_cached_wall(
+                if self.used>=self.max_requests and (not cache_wall or not client.has_cached_wall(
                         gid,count=params.get('count',100),offset=params.get('offset',0))):
                     raise api.VkApiFailure('Collection request budget exhausted')
                 try:return client.wall_get(gid,count=params.get('count',100),offset=params.get('offset',0))
