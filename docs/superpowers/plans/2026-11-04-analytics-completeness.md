@@ -56,10 +56,17 @@ by-ID retry was attempted. Their removal/accessibility cause remains unknown.
 
 ## Task 3: Verification and installation
 
-- [ ] Run full offline suite, focused regressions, source review and exact-commit CI required by project workflow.
-- [ ] Prepare reviewed source-only installation after natural process completion; protect analytics backup and immutable old records, leave worker source/state unchanged.
-- [ ] Perform a bounded new collection with unchanged registry and explicit period, verify all 16 causes individually and report exact obtainable coverage/ER.
-- [ ] Verify scheduling behavior, worker health, history preservation and remaining limits; update operational docs and local working source separately from publication/deployment status.
+- [x] Run full offline suite, focused regressions, source review and exact-commit CI required by project workflow.
+- [x] Prepare reviewed source-only installation after natural process completion; protect analytics backup and immutable old records, leave worker source/state unchanged.
+- [x] Perform a bounded new collection with unchanged registry and explicit period, verify all 16 causes individually and report exact obtainable coverage/ER.
+- [x] Verify scheduling behavior, worker health, history preservation and remaining limits; update operational docs and local working source separately from publication/deployment status.
+
+Acceptance: source937e53b,1293tests CI Linux/Windows green,135VMtests green.
+New runa8a55ba70c0c42108dcc322b7faf3c9c read64walls/64HTTP;49complete,
+15partial only external historical absence (78posts). All2381available posts
+have complete counters, subsetER2.9351024493%; full historical ER stays NULL.
+Source installed16:30:55YEKT, panel reloaded, worker9936 preserved. All old rows
+and schemas of11tables,65official imports and27frozenreports preserved.
 
 ## Diagnosis so far
 

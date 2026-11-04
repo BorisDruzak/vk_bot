@@ -75,4 +75,66 @@ https://github.com/VKCOM/vk-api-schema/blob/master/wall/objects.json.
 не даёт полного календарного покрытия. Полный исторический ER остаётся NULL,
 если хотя бы одна требуемая запись или её счётчики неизвестны.
 
-Статус установки и фактический повторный замер записываются ниже после приёмки.
+## Новый замер и проверка сохранности
+
+Код `937e53be6536c0e10ce4dda957dc7ea4b0316105`, отдельный run
+`a8a55ba70c0c42108dcc322b7faf3c9c`, период [14 октября; 4 ноября), YEKT.
+Замер 4 ноября 16:02:47–16:08:04 YEKT; ровно 64 сетевых чтения через прежний
+ledger/pacing/leases, новая отправка действий не запускалась.
+
+- Обработаны 64/64 сообщества: 49 архивов complete; 15 partial только по
+  `historical_posts_not_returned`. `invalid_post`/`ordering_anomaly`/read errors нет.
+- 2459 известных публикаций, из них 2381 доступны со всеми четырьмя счётчиками;
+  78 исторических записей недоступны. Это известный минимум, а не доказательство
+  существования только этих публикаций за весь период.
+- У доступных: L=20883, C=551, R=3054, V=834315. Диагностический ER доступной
+  выборки = 2.9351024493%, П3.3 этой выборки = 81.5306235921%.
+  Полные районные ER/П3.3 остаются NULL из-за 78 неизвестных записей.
+- Все четыре совместных размещения в периоде имеют точные local/canonical
+  связи. Повторов одной canonical identity между 64 стенами в этом замере нет.
+- У ранее неполного 217362247_4537 теперь API вернул views=43; NULL устранён
+  новым наблюдением, прежний снимок не изменён.
+- Frozen report `fd3e343517ff466e9a786160329fc26f`. CSV содержит точные ID,
+  UTC-время, статусы и canonical provenance; исходные 27 frozen reports сохранены.
+
+SQLite online backup сделан до изменения схемы. Проверены неизменность всех
+прежних строк и схем 11 таблиц, integrity_check=ok и foreign_key_check=0.
+Добавлены только две таблицы metadata. Worker PID9936 не останавливался;
+после освобождения reader leases штатно начал batch39 в16:08:05 YEKT.
+
+Локальный полный прогон ядра:1285 PASS; финальные135 профильных тестов PASS
+локально и на VM Python3.13. Новая панель прошла независимое ревью вместе
+с проверками auth/read-only/no-RPC.
+
+## Публикация и установка
+
+Исходники `937e53b` опубликованы в main после успешных exact-SHA CI:
+[Offline checks](https://github.com/BorisDruzak/vk_bot/actions/runs/41818149768)
+и [Offline OMSU analytics](https://github.com/BorisDruzak/vk_bot/actions/runs/41818149802).
+Полный CI:1293 tests на Linux (1 platform skip) и Windows (без skip), ошибок нет.
+
+4 ноября 16:30:55 YEKT на VM установлены шесть сверенных по Git blob SHA файлов:
+четыре модуля ядра аналитики, reader панели и диагностический probe. Перед заменой
+сохранена копия исходников; предусматривался откат. Перезагружена только задача
+VKUnifiedWebPanel. Worker9936 не перезапускался. Конфиги, worker/web-overlay
+исходники и определения трёх задач совпали с исходными хешами.
+
+Приёмка: HTTP /=200, anonymous /api/analytics=401; production read-only reader
+читает run `a8a55ba70c0c42108dcc322b7faf3c9c`,64группы и тот же ER2.9351024493%.
+Штатный entrypoint --preflight: preflight_ok,64группы,key_available/TLS=true,
+api_requests=0. Установка не запускала новые VK-действия.
+
+Повторно сверены все прежние строки и схемы11таблиц, включая65официальных
+измерений и27frozen reports: без изменений; integrity=ok, FK errors=0.
+На16:32:45YEKT worker9936/live/waiting_batch, block=NULL; batch39 штатно завершён
+16:25:14YEKT. Расписания, квоты и сохранённые дни не менялись.
+
+Семь дополнительных пропусков нового замера также проверены: пять отсутствовали
+в ранее прочитанных all-страницах; для двух61594586 выполнено ещё одно uncached
+all-чтение с достижением старой границы. Причина исчезновения не объявляется
+удалением. Диагностические source-копии убраны из корня VM в архив ремонта.
+
+Результаты VM: `analytics_local/repair-20261104/` — deployment.json,
+final-full-preservation.json, final-worker-and-preservation.json и closed-period-final.
+Локально: `outputs/analytics-repair-20261104/closed-period-final/` — report.html,
+report.json, communities.csv, posts.csv, missing-publications.csv и receipt.json.

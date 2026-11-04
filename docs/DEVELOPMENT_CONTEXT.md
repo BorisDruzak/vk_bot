@@ -1,5 +1,15 @@
 # ПОЛНЫЙ КОНТЕКСТ РАЗРАБОТКИ — VK Unified / VK Bot
 
+4 ноября 16:30:55 YEKT: аналитика937e53b установлена после exact-SHA CI1293tests
+Linux/Windows green и135VMtests. Шесть analytics source-файлов; перезагружена
+панель, worker9936 не перезапускался. Совместные посты имеют явные local/canonical
+ID, старые оригиналы не обрывают пагинацию, busy ожидается в прежнем deadline.
+Новый замер64группы/64HTTP:49complete,15partial из-за78исторических недоступных;
+2381полных счётчиков, ER доступной выборки2.9351024493%, полный ER=NULL.
+Все старые строки/схемы11таблиц,65official и27frozenreports сохранены; квоты/
+планы/привязки и worker/POS-overlay не менялись. См.ANALYTICS_COMPLETENESS_2026_11_04.md.
+
+
 1ноября22:16:06YEKT: source5fefa96 установлен после явного разрешения на безопасный
 restart. Exactoffline/analyticsCIgreen; VM1235/0errors/0failures/33Node-skip/583.465s.
 Batch66finish22:10:26.244642, quiescentstop22:14:03.998084; backup11DB/integrityOK+
